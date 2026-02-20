@@ -89,4 +89,122 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+/**
+ * Notes queries
+ */
+export async function getNotesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { notes } = await import("../drizzle/schema");
+  const { eq, and } = await import("drizzle-orm");
+  return db.select().from(notes).where(and(eq(notes.userId, userId), eq(notes.isTrashed, 0)));
+}
+
+export async function getNoteById(noteId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { notes } = await import("../drizzle/schema");
+  const { eq, and } = await import("drizzle-orm");
+  const result = await db.select().from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, userId))).limit(1);
+  return result[0];
+}
+
+export async function createNote(note: { userId: number; title?: string; encryptedContent: string; noteType: "plain" | "rich" | "markdown" | "checklist" | "code" | "spreadsheet" }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { notes } = await import("../drizzle/schema");
+  const result = await db.insert(notes).values(note);
+  return result;
+}
+
+export async function updateNote(noteId: number, userId: number, updates: { title?: string; encryptedContent?: string; isPinned?: number; isArchived?: number; isTrashed?: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { notes } = await import("../drizzle/schema");
+  const { eq, and } = await import("drizzle-orm");
+  await db.update(notes).set(updates).where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
+}
+
+export async function deleteNote(noteId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { notes } = await import("../drizzle/schema");
+  const { eq, and } = await import("drizzle-orm");
+  await db.delete(notes).where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
+}
+
+/**
+ * Tags queries
+ */
+export async function getTagsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { tags } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  return db.select().from(tags).where(eq(tags.userId, userId));
+}
+
+export async function createTag(tag: { userId: number; name: string; color?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { tags } = await import("../drizzle/schema");
+  const result = await db.insert(tags).values(tag);
+  return result;
+}
+
+/**
+ * Folders queries
+ */
+export async function getFoldersByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { folders } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  return db.select().from(folders).where(eq(folders.userId, userId));
+}
+
+export async function createFolder(folder: { userId: number; name: string; parentId?: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { folders } = await import("../drizzle/schema");
+  const result = await db.insert(folders).values(folder);
+  return result;
+}
+
+/**
+ * Revisions queries
+ */
+export async function getRevisionsByNoteId(noteId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { revisions } = await import("../drizzle/schema");
+  const { eq, desc } = await import("drizzle-orm");
+  return db.select().from(revisions).where(eq(revisions.noteId, noteId)).orderBy(desc(revisions.createdAt));
+}
+
+export async function createRevision(revision: { noteId: number; encryptedContent: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { revisions } = await import("../drizzle/schema");
+  const result = await db.insert(revisions).values(revision);
+  return result;
+}
+
+/**
+ * User settings queries
+ */
+export async function getUserSettings(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { userSettings } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  const result = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
+  return result[0];
+}
+
+export async function upsertUserSettings(settings: { userId: number; saltForKeyDerivation?: string; twoFactorEnabled?: number; twoFactorSecret?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { userSettings } = await import("../drizzle/schema");
+  await db.insert(userSettings).values(settings).onDuplicateKeyUpdate({ set: settings });
+}
