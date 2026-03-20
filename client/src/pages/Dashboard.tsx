@@ -160,9 +160,12 @@ export default function Dashboard() {
     setIsEditing(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     clearEncryptionKey();
-    logout();
+    await logout();
+    // Hard-navigate to the login URL so the session cookie is fully cleared
+    // and the user sees the landing page rather than a broken dashboard
+    window.location.href = "/";
   };
 
   const filteredNotes = notes.filter((note) =>

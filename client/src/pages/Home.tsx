@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { Shield, Lock, Cloud, Zap, FileText, Tag } from "lucide-react";
 
@@ -8,11 +9,14 @@ export default function Home() {
   const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
 
-  // Redirect authenticated users to setup/dashboard
-  if (user && !loading) {
-    setLocation("/setup");
-    return null;
-  }
+  // Redirect authenticated users to setup/dashboard — must be in useEffect, not render
+  useEffect(() => {
+    if (user && !loading) {
+      setLocation("/setup");
+    }
+  }, [user, loading, setLocation]);
+
+  if (loading) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
