@@ -89,3 +89,12 @@
 - [x] Create Register page
 - [x] Remove Manus OAuth dependency from app flow
 - [x] Protect all existing routes with local auth guard
+
+## Note Type Editors (Visible & Functional)
+- [x] Add prominent note type selector when creating/editing notes
+- [x] Plain text editor (textarea)
+- [x] Rich text editor with formatting toolbar (TipTap)
+- [x] Markdown editor with split-pane live preview
+- [x] Checklist editor with interactive checkboxes and add/remove items
+- [x] Code snippet editor with syntax highlighting and language selector
+- [x] Spreadsheet editor with basic row/column grid
