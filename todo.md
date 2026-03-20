@@ -74,3 +74,6 @@
 - [ ] Test offline functionality
 - [ ] Test real-time sync across devices
 - [ ] Create deployment checkpoint
+
+## Bug Fixes
+- [x] Fix atob decryption error for notes with non-Base64 / plain-text content

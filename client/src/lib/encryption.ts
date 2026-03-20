@@ -76,27 +76,64 @@ export async function encrypt(data: string, key: CryptoKey): Promise<string> {
 }
 
 /**
- * Decrypt data using AES-256-GCM
+ * Check whether a string is valid Base64
  */
-export async function decrypt(encryptedData: string, key: CryptoKey): Promise<string> {
-  const combined = base64ToArrayBuffer(encryptedData);
-  
+export function isValidBase64(str: string): boolean {
+  if (!str || str.length === 0) return false;
+  try {
+    // Base64 strings must have length divisible by 4 (with padding)
+    // and contain only valid Base64 characters
+    return /^[A-Za-z0-9+/]*={0,2}$/.test(str) && str.length % 4 === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Decrypt data using AES-256-GCM.
+ * Returns null if the data is not valid encrypted content (e.g. legacy plain-text notes).
+ */
+export async function decrypt(encryptedData: string, key: CryptoKey): Promise<string | null> {
+  // Guard: if the content is not valid Base64, it was never encrypted
+  if (!isValidBase64(encryptedData)) {
+    return encryptedData; // Return as-is — it's plain text
+  }
+
+  let combined: ArrayBuffer;
+  try {
+    combined = base64ToArrayBuffer(encryptedData);
+  } catch {
+    // atob failed — treat as plain text
+    return encryptedData;
+  }
+
+  // Guard: minimum size is IV (12 bytes) + 1 byte ciphertext + 16 byte GCM tag = 29 bytes
+  if (combined.byteLength < IV_LENGTH + 17) {
+    return encryptedData;
+  }
+
   // Extract IV and encrypted data
   const iv = combined.slice(0, IV_LENGTH);
   const data = combined.slice(IV_LENGTH);
 
-  // Decrypt
-  const decryptedBuffer = await crypto.subtle.decrypt(
-    {
-      name: "AES-GCM",
-      iv: iv,
-    },
-    key,
-    data
-  );
+  try {
+    // Decrypt
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: iv,
+      },
+      key,
+      data
+    );
 
-  const decoder = new TextDecoder();
-  return decoder.decode(decryptedBuffer);
+    const decoder = new TextDecoder();
+    return decoder.decode(decryptedBuffer);
+  } catch {
+    // Decryption failed — wrong key or corrupted data
+    // Return a placeholder rather than crashing
+    return null;
+  }
 }
 
 /**

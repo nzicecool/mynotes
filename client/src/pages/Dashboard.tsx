@@ -117,6 +117,10 @@ export default function Dashboard() {
 
     try {
       const decryptedContent = await decrypt(note.encryptedContent, key);
+      if (decryptedContent === null) {
+        toast.error("Could not decrypt this note. It may have been encrypted with a different password.");
+        return;
+      }
       setSelectedNoteId(noteId);
       setNoteTitle(note.title || "");
       setNoteContent(decryptedContent);
