@@ -119,7 +119,17 @@ export const appRouter = router({
   settings: router({
     get: protectedProcedure.query(async ({ ctx }) => {
       const { getUserSettings } = await import("./db");
-      return getUserSettings(ctx.user.id);
+      const settings = await getUserSettings(ctx.user.id);
+      // Always return a non-undefined value — tRPC queries must not return undefined
+      return settings ?? {
+        id: null,
+        userId: ctx.user.id,
+        saltForKeyDerivation: null,
+        twoFactorEnabled: 0,
+        twoFactorSecret: null,
+        createdAt: null,
+        updatedAt: null,
+      };
     }),
     updateSalt: protectedProcedure
       .input(z.object({ salt: z.string() }))
