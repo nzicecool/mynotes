@@ -98,3 +98,6 @@
 - [x] Checklist editor with interactive checkboxes and add/remove items
 - [x] Code snippet editor with syntax highlighting and language selector
 - [x] Spreadsheet editor with basic row/column grid
+
+## Bug Fixes
+- [x] Fix nested button error in Dashboard sidebar note list

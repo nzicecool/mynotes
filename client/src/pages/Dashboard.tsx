@@ -265,10 +265,13 @@ export default function Dashboard() {
                   const typeMeta = NOTE_TYPES.find((t) => t.type === note.noteType);
                   const Icon = typeMeta?.icon ?? FileText;
                   return (
-                    <button
+                    <div
                       key={note.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleSelectNote(note.id)}
-                      className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors group flex items-start gap-2.5 ${
+                      onKeyDown={(e) => e.key === "Enter" && handleSelectNote(note.id)}
+                      className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors group flex items-start gap-2.5 cursor-pointer ${
                         selectedNoteId === note.id
                           ? "bg-indigo-50 border border-indigo-200"
                           : "hover:bg-accent border border-transparent"
@@ -294,7 +297,7 @@ export default function Dashboard() {
                       >
                         <Trash2 className="w-3 h-3 text-destructive" />
                       </Button>
-                    </button>
+                    </div>
                   );
                 })
               )}
