@@ -77,6 +77,37 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 }
 
+/** Look up a user by email address (for local auth) */
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result[0];
+}
+
+/** Look up a user by numeric id */
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0];
+}
+
+/** Create a new local-auth user with a bcrypt password hash */
+export async function createLocalUser(data: { name: string; email: string; passwordHash: string; role?: "user" | "admin" }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(users).values({
+    name: data.name,
+    email: data.email,
+    passwordHash: data.passwordHash,
+    loginMethod: "local",
+    role: data.role ?? "user",
+    lastSignedIn: new Date(),
+  });
+  return result;
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) {

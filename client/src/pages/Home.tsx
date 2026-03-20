@@ -1,6 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { getLoginUrl } from "@/const";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { Shield, Lock, Cloud, Zap, FileText, Tag } from "lucide-react";
@@ -11,8 +10,10 @@ export default function Home() {
 
   // Redirect authenticated users to setup/dashboard — must be in useEffect, not render
   useEffect(() => {
-    if (user && !loading) {
-      setLocation("/setup");
+    if (!loading) {
+      if (user) {
+        setLocation("/setup");
+      }
     }
   }, [user, loading, setLocation]);
 
@@ -28,9 +29,10 @@ export default function Home() {
           </div>
           <span className="text-2xl font-bold text-gray-900">MyNotes</span>
         </div>
-        <Button asChild>
-          <a href={getLoginUrl()}>Sign In</a>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setLocation("/login")}>Sign In</Button>
+          <Button onClick={() => setLocation("/register")}>Get Started</Button>
+        </div>
       </header>
 
       {/* Hero Section */}
@@ -45,8 +47,11 @@ export default function Home() {
             A powerful note-taking app with end-to-end encryption, offline support, and real-time sync across all your devices.
           </p>
           <div className="flex gap-4 justify-center">
-            <Button size="lg" asChild className="text-lg px-8">
-              <a href={getLoginUrl()}>Get Started Free</a>
+            <Button size="lg" className="text-lg px-8" onClick={() => setLocation("/register")}>
+              Get Started Free
+            </Button>
+            <Button size="lg" variant="outline" className="text-lg px-8" onClick={() => setLocation("/login")}>
+              Sign In
             </Button>
           </div>
         </div>
@@ -96,8 +101,8 @@ export default function Home() {
           <p className="text-gray-600 mb-8">
             Join thousands of users who trust MyNotes for their private thoughts and ideas.
           </p>
-          <Button size="lg" asChild className="text-lg px-8">
-            <a href={getLoginUrl()}>Start Taking Notes</a>
+          <Button size="lg" className="text-lg px-8" onClick={() => setLocation("/register")}>
+            Start Taking Notes
           </Button>
         </div>
       </section>

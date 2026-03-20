@@ -78,3 +78,14 @@
 ## Bug Fixes
 - [x] Fix atob decryption error for notes with non-Base64 / plain-text content
 - [x] Fix logout not working on Dashboard
+
+## Local Authentication (Self-Hosted)
+- [x] Add password hash column to users table
+- [x] Build register endpoint (email + password)
+- [x] Build login endpoint with bcrypt verify + JWT session
+- [x] Build logout endpoint (clear cookie)
+- [x] Build /me endpoint for session check
+- [x] Create Login page
+- [x] Create Register page
+- [x] Remove Manus OAuth dependency from app flow
+- [x] Protect all existing routes with local auth guard

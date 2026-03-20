@@ -15,6 +15,13 @@
       "when": 1771595068353,
       "tag": "0001_daffy_mercury",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1773977571358,
+      "tag": "0002_needy_killraven",
+      "breakpoints": true
     }
   ]
 }

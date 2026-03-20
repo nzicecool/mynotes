@@ -162,10 +162,9 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     clearEncryptionKey();
-    await logout();
-    // Hard-navigate to the login URL so the session cookie is fully cleared
-    // and the user sees the landing page rather than a broken dashboard
-    window.location.href = "/";
+    // Use local auth logout endpoint directly
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    window.location.href = "/login";
   };
 
   const filteredNotes = notes.filter((note) =>

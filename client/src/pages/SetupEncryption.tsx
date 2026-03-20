@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,15 +8,24 @@ import { deriveKey, generateSalt, setEncryptionKey } from "@/lib/encryption";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Lock, Shield } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function SetupEncryption() {
   const [, setLocation] = useLocation();
+  const { user, loading: authLoading } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-
   const settingsMutation = trpc.settings.updateSalt.useMutation();
-  const { data: settings } = trpc.settings.get.useQuery();
+  const { data: settings } = trpc.settings.get.useQuery(undefined, { enabled: !!user });
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      setLocation("/login");
+    }
+  }, [user, authLoading, setLocation]);
+
+  if (authLoading || !user) return null;
 
   const handleSetup = async () => {
     if (!password) {
