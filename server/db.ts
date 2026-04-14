@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -238,4 +238,47 @@ export async function upsertUserSettings(settings: { userId: number; saltForKeyD
   if (!db) throw new Error("Database not available");
   const { userSettings } = await import("../drizzle/schema");
   await db.insert(userSettings).values(settings).onDuplicateKeyUpdate({ set: settings });
+}
+
+/**
+ * Password reset token queries
+ */
+
+/** Delete any existing tokens for the user, then insert a new one. */
+export async function createPasswordResetToken(userId: number, tokenHash: string, expiresAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { passwordResetTokens } = await import("../drizzle/schema");
+  // Invalidate previous tokens for this user
+  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+  await db.insert(passwordResetTokens).values({ userId, tokenHash, expiresAt });
+}
+
+/** Find a valid (non-expired) reset token record by userId. */
+export async function getValidResetTokenByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { passwordResetTokens } = await import("../drizzle/schema");
+  const now = new Date();
+  const result = await db
+    .select()
+    .from(passwordResetTokens)
+    .where(and(eq(passwordResetTokens.userId, userId), gt(passwordResetTokens.expiresAt, now)))
+    .limit(1);
+  return result[0];
+}
+
+/** Delete all reset tokens for a user (called after successful reset). */
+export async function deleteResetTokensByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const { passwordResetTokens } = await import("../drizzle/schema");
+  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+}
+
+/** Update a user's password hash (used after successful reset). */
+export async function updateUserPassword(userId: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
 }

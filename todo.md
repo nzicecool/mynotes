@@ -101,3 +101,14 @@
 
 ## Bug Fixes
 - [x] Fix nested button error in Dashboard sidebar note list
+
+## Password Reset Flow
+- [x] Add passwordResetTokens table to database schema
+- [x] Add db helpers: createResetToken, getResetToken, deleteResetToken
+- [x] Build POST /api/auth/forgot-password endpoint (generate token, send/log link)
+- [x] Build POST /api/auth/reset-password endpoint (verify token, update password)
+- [x] Build Forgot Password page (/forgot-password)
+- [x] Build Reset Password page (/reset-password?token=...)
+- [x] Add "Forgot password?" link to Login page
+- [x] Optional SMTP email dispatch with nodemailer
+- [x] Admin console log fallback for local deployments without SMTP
