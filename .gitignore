@@ -108,3 +108,18 @@ temp/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
+
+# Manus platform runtime logs (never commit)
+.manus-logs/
+
+# Certificate and key files (never commit)
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.crt
+
+# Additional env variants
+.env.*
+!.env.example
