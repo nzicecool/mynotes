@@ -1,0 +1,117 @@
+---
+# MyNotes — Application Deployment
+#
+# Replace YOUR_REGISTRY/mynotes:latest with your actual image reference.
+# For Raspberry Pi 3B, build and push with:
+#   docker buildx build --platform linux/arm/v7 \
+#     -t YOUR_REGISTRY/mynotes:latest --push .
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mynotes-app
+  namespace: mynotes
+  labels:
+    app.kubernetes.io/name: mynotes-app
+    app.kubernetes.io/component: app
+    app.kubernetes.io/part-of: mynotes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mynotes-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: mynotes-app
+    spec:
+      # Wait for MySQL to be ready before starting the app
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z mynotes-mysql 3306; do
+                echo "Waiting for MySQL..."; sleep 2;
+              done
+              echo "MySQL is ready."
+      containers:
+        - name: mynotes
+          # Replace with your image — must be built for linux/arm/v7 for Pi 3B
+          image: YOUR_REGISTRY/mynotes:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mynotes-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mynotes-secrets
+                  key: JWT_SECRET
+            - name: AGENTMAIL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mynotes-secrets
+                  key: AGENTMAIL_API_KEY
+                  optional: true
+            - name: AGENTMAIL_INBOX_ID
+              valueFrom:
+                secretKeyRef:
+                  name: mynotes-secrets
+                  key: AGENTMAIL_INBOX_ID
+                  optional: true
+          # Conservative resource limits for Raspberry Pi 3B (1 GB RAM)
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "384Mi"
+              cpu: "800m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+# ClusterIP service — accessed by the Ingress below
+apiVersion: v1
+kind: Service
+metadata:
+  name: mynotes-app
+  namespace: mynotes
+  labels:
+    app.kubernetes.io/name: mynotes-app
+    app.kubernetes.io/component: app
+    app.kubernetes.io/part-of: mynotes
+spec:
+  selector:
+    app: mynotes-app
+  ports:
+    - port: 80
+      targetPort: 3000
+      name: http

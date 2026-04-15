@@ -1,0 +1,9 @@
+---
+# MyNotes — k3s / Kubernetes Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mynotes
+  labels:
+    app.kubernetes.io/name: mynotes
+    app.kubernetes.io/part-of: mynotes

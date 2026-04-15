@@ -11,7 +11,7 @@
 | **End-to-end encryption** | AES-256-GCM encryption with PBKDF2 key derivation. The server only ever stores ciphertext. |
 | **6 note types** | Plain Text, Rich Text (TipTap), Markdown (live preview), Checklist, Code (syntax highlighting), Spreadsheet |
 | **Local authentication** | Self-hosted email/password auth with bcrypt (12 rounds) and JWT session tokens. No external auth provider required. |
-| **Password reset** | Secure token-based reset flow with optional SMTP email delivery and console fallback for local deployments. |
+| **Password reset** | Secure token-based reset flow with AgentMail.to (primary), optional SMTP fallback, and console fallback for air-gapped deployments. |
 | **Offline-first** | IndexedDB local storage with a sync queue for changes made while offline. |
 | **Tags & folders** | Organise notes with nested folders and multi-tag support. |
 | **Revision history** | Automatic versioning on every save with the ability to view previous versions. |
@@ -26,21 +26,21 @@
 |---|---|
 | Frontend | React 19, Tailwind CSS 4, shadcn/ui, TipTap, Wouter |
 | Backend | Node.js 22, Express 4, tRPC 11 |
-| Database | MySQL / TiDB (via Drizzle ORM) |
+| Database | MySQL 8 (via Drizzle ORM) |
 | Auth | bcryptjs, JWT (jose), HTTP-only cookies |
-| Email | Nodemailer (optional SMTP) |
+| Email | AgentMail.to (primary), Nodemailer/SMTP (fallback) |
 | Testing | Vitest |
 | Package manager | pnpm |
+| Container | Docker (multi-arch: amd64, arm64, arm/v7) |
+| Orchestration | k3s / Kubernetes |
 
 ---
 
 ## Prerequisites
 
-Before running MyNotes locally, ensure you have the following installed:
-
 - **Node.js** v22 or later — [nodejs.org](https://nodejs.org)
 - **pnpm** v10 or later — `npm install -g pnpm`
-- **MySQL** 8.0+ (or a compatible database such as TiDB, PlanetScale, or a Docker MySQL container)
+- **MySQL** 8.0+ (or Docker — see deployment options below)
 
 ---
 
@@ -61,8 +61,6 @@ pnpm install
 
 ### 3. Configure environment variables
 
-Copy the example environment file and fill in your values:
-
 ```bash
 cp .env.example .env
 ```
@@ -74,11 +72,9 @@ DATABASE_URL=mysql://user:password@localhost:3306/mynotes
 JWT_SECRET=your_long_random_secret_here
 ```
 
-See the [Environment Variables](#environment-variables) section below for a full reference.
+See the [Environment Variables](#environment-variables) section for a full reference.
 
 ### 4. Set up the database
-
-Run the Drizzle migrations to create all required tables:
 
 ```bash
 pnpm db:push
@@ -90,28 +86,34 @@ pnpm db:push
 pnpm dev
 ```
 
-The application will be available at **http://localhost:3000**.
-
-### 6. Create your first account
-
-Navigate to `http://localhost:3000/register` to create an account, then set up your encryption password at `/setup`.
+Open **http://localhost:3000**, navigate to `/register` to create your account, then set up your encryption password at `/setup`.
 
 ---
 
 ## Environment Variables
 
-All environment variables are documented in `.env.example`. The table below describes each one.
+All variables are documented in `.env.example`.
 
 ### Required
 
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | MySQL connection string, e.g. `mysql://user:pass@localhost:3306/mynotes` |
-| `JWT_SECRET` | Secret used to sign JWT session tokens. Use a random string of at least 32 characters. Generate one with: `openssl rand -hex 32` |
+| `JWT_SECRET` | Secret for signing JWT tokens. Generate with: `openssl rand -hex 32` |
 
-### Optional — SMTP (Password Reset Emails)
+### Email — AgentMail.to (Recommended)
 
-If `SMTP_HOST` is not set, password reset links are printed to the **server console** instead. This is the recommended approach for local or air-gapped deployments.
+[AgentMail.to](https://agentmail.to) is the primary email provider for password reset. It requires no SMTP server and works out of the box.
+
+| Variable | Description |
+|---|---|
+| `AGENTMAIL_API_KEY` | Your AgentMail API key from [console.agentmail.to](https://console.agentmail.to) |
+| `AGENTMAIL_INBOX_ID` | _(Optional)_ A pre-created inbox ID. If unset, one is created automatically on first use. |
+| `AGENTMAIL_INBOX_USERNAME` | _(Optional)_ Username for the auto-created inbox. Defaults to `mynotes-noreply`. |
+
+### Email — SMTP Fallback (Optional)
+
+If `AGENTMAIL_API_KEY` is not set or AgentMail delivery fails, MyNotes falls back to SMTP. If neither is configured, reset links are printed to the server console.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -124,11 +126,26 @@ If `SMTP_HOST` is not set, password reset links are printed to the **server cons
 
 ---
 
-## Configuring SMTP for Password Reset Emails
+## Configuring Email for Password Reset
 
-MyNotes supports any standard SMTP server. Below are example configurations for common providers.
+### Option 1: AgentMail.to (Recommended)
 
-### Gmail (App Password)
+AgentMail.to provides a simple REST API for sending transactional emails — no SMTP server required.
+
+1. Sign up at [agentmail.to](https://agentmail.to) and obtain your API key from the [console](https://console.agentmail.to).
+2. Add the following to your `.env`:
+
+```env
+AGENTMAIL_API_KEY=am_your_api_key_here
+# Optional: pre-create an inbox and set its ID to avoid auto-creation on startup
+AGENTMAIL_INBOX_ID=your_inbox_id_here
+```
+
+MyNotes will automatically create a dedicated `mynotes-noreply` inbox on first use if `AGENTMAIL_INBOX_ID` is not set. The inbox ID is cached in memory for the lifetime of the process.
+
+### Option 2: SMTP (Fallback)
+
+#### Gmail (App Password)
 
 Google requires an [App Password](https://support.google.com/accounts/answer/185833) when 2-Step Verification is enabled.
 
@@ -141,7 +158,7 @@ SMTP_PASS=your_16_char_app_password
 SMTP_FROM=MyNotes <your.address@gmail.com>
 ```
 
-### Outlook / Microsoft 365
+#### Outlook / Microsoft 365
 
 ```env
 SMTP_HOST=smtp.office365.com
@@ -152,7 +169,7 @@ SMTP_PASS=your_password
 SMTP_FROM=MyNotes <your.address@outlook.com>
 ```
 
-### Self-hosted (e.g. Postfix, Mailcow, Mailu)
+#### Self-hosted (Postfix, Mailcow, Mailu)
 
 ```env
 SMTP_HOST=mail.yourdomain.com
@@ -163,9 +180,9 @@ SMTP_PASS=your_smtp_password
 SMTP_FROM=MyNotes <noreply@yourdomain.com>
 ```
 
-### No email server (console fallback)
+### Option 3: Console Fallback (Air-gapped / Local)
 
-If `SMTP_HOST` is not set, the reset URL is logged to stdout in a clearly marked block:
+If neither AgentMail nor SMTP is configured, the reset URL is logged to stdout:
 
 ```
 ============================================================
@@ -176,6 +193,136 @@ If `SMTP_HOST` is not set, the reset URL is logged to stdout in a clearly marked
 ```
 
 Copy the URL from the console and open it in a browser to complete the reset.
+
+---
+
+## Deployment
+
+### Option 1: Docker Compose (Recommended for most users)
+
+The included `docker-compose.yml` starts MyNotes and MySQL together with a single command.
+
+```bash
+# 1. Copy and edit the environment file
+cp .env.example .env
+# Edit .env — set JWT_SECRET, MYSQL_PASSWORD, and optionally AGENTMAIL_API_KEY
+
+# 2. Build the image
+docker compose build
+
+# 3. Start all services
+docker compose up -d
+
+# 4. Run database migrations
+docker compose exec app node -e "process.exit(0)"   # wait for app to be ready
+# Then in a separate terminal:
+docker compose exec app sh -c "cd /app && node dist/index.js &"
+# Or simply visit http://localhost:3000 — migrations run automatically on startup
+
+# 5. Open the app
+open http://localhost:3000
+```
+
+To stop: `docker compose down`  
+To stop and remove data: `docker compose down -v`
+
+#### Docker Compose for Raspberry Pi 3B
+
+The Pi 3B uses a 32-bit ARMv7 CPU. Build the image on your workstation using Docker Buildx:
+
+```bash
+# Enable multi-platform builds (once per machine)
+docker buildx create --use --name mybuilder
+
+# Build the ARM32v7 image and load it locally
+docker buildx build --platform linux/arm/v7 -t mynotes:latest --load .
+
+# Transfer to the Pi (or push to a registry and pull on the Pi)
+docker save mynotes:latest | ssh pi@raspberrypi.local "docker load"
+
+# On the Pi, start with Docker Compose
+ssh pi@raspberrypi.local
+cd ~/mynotes
+docker compose up -d
+```
+
+> **Note:** MySQL does not publish an official `arm/v7` image. Use `biarms/mysql:5.7` or `mariadb:10.11` as a drop-in replacement on the Pi 3B. Edit the `db.image` field in `docker-compose.yml` accordingly.
+
+---
+
+### Option 2: Raspberry Pi 3B — Standalone Docker
+
+If you prefer to run the containers individually without Docker Compose:
+
+```bash
+# 1. Create a Docker network
+docker network create mynotes-net
+
+# 2. Start MySQL (use MariaDB for ARM32v7 compatibility)
+docker run -d \
+  --name mynotes-db \
+  --network mynotes-net \
+  --restart unless-stopped \
+  -e MYSQL_ROOT_PASSWORD=changeme_root \
+  -e MYSQL_DATABASE=mynotes \
+  -e MYSQL_USER=mynotes \
+  -e MYSQL_PASSWORD=changeme \
+  -v mynotes_db_data:/var/lib/mysql \
+  mariadb:10.11
+
+# 3. Build the MyNotes image for ARMv7
+docker buildx build --platform linux/arm/v7 -t mynotes:latest --load .
+
+# 4. Start the app
+docker run -d \
+  --name mynotes-app \
+  --network mynotes-net \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e DATABASE_URL="mysql://mynotes:changeme@mynotes-db:3306/mynotes" \
+  -e JWT_SECRET="your_long_random_secret" \
+  -e AGENTMAIL_API_KEY="your_agentmail_key" \
+  mynotes:latest
+
+# 5. Open http://raspberrypi.local:3000
+```
+
+**Resource tips for Pi 3B (1 GB RAM):**
+- Limit MySQL memory: add `--innodb-buffer-pool-size=128M --max-connections=50` to the MariaDB command
+- Avoid running other memory-intensive containers on the same Pi
+
+---
+
+### Option 3: k3s (Kubernetes on Raspberry Pi)
+
+For a production-grade self-hosted deployment using k3s, refer to the dedicated guide:
+
+**[deploy/k3s/README.md](deploy/k3s/README.md)**
+
+The k3s manifests in `deploy/k3s/` include:
+
+| File | Purpose |
+|---|---|
+| `00-namespace.yaml` | Creates the `mynotes` Kubernetes namespace |
+| `01-secrets.yaml` | Secrets template (replace placeholders before applying) |
+| `02-mysql.yaml` | MySQL StatefulSet with PVC, tuned for Pi 3B memory constraints |
+| `03-app.yaml` | MyNotes Deployment with health checks and resource limits |
+| `04-ingress.yaml` | Traefik Ingress for HTTP/HTTPS access |
+
+Quick start:
+
+```bash
+# Install k3s on the Pi
+curl -sfL https://get.k3s.io | sh -
+
+# Apply manifests
+kubectl apply -f deploy/k3s/00-namespace.yaml
+kubectl apply -f deploy/k3s/ -n mynotes
+
+# Watch the rollout
+kubectl rollout status deployment/mynotes-app -n mynotes
+```
 
 ---
 
@@ -203,13 +350,17 @@ mynotes/
 │       │   └── editors/     # RichTextEditor, MarkdownEditor, ChecklistEditor, etc.
 │       ├── lib/             # Encryption, offline storage, tRPC client
 │       └── pages/           # Route-level page components
+├── deploy/
+│   └── k3s/                 # Kubernetes manifests + deployment guide
 ├── drizzle/                 # Database schema and migration files
 ├── server/                  # Express + tRPC backend
-│   ├── _core/               # Auth, context, session, SMTP helpers
+│   ├── _core/               # Auth, context, session, AgentMail, SMTP helpers
 │   ├── db.ts                # Database query helpers
 │   └── routers.ts           # tRPC procedure definitions
 ├── shared/                  # Shared constants and types
 ├── .env.example             # Environment variable template
+├── Dockerfile               # Multi-arch Docker build (amd64, arm64, arm/v7)
+├── docker-compose.yml       # Docker Compose for easy self-hosting
 └── todo.md                  # Development task tracker
 ```
 
@@ -251,7 +402,7 @@ Please do not commit `.env` files or any credentials. The `.gitignore` is config
 - [ ] Auto-save with debounce
 - [ ] Note export (PDF, Markdown, plain text)
 - [ ] Two-factor authentication (TOTP)
-- [ ] Docker Compose setup for easy self-hosting
+- [ ] GitHub Actions CI workflow
 
 ---
 

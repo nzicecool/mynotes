@@ -112,3 +112,21 @@
 - [x] Add "Forgot password?" link to Login page
 - [x] Optional SMTP email dispatch with nodemailer
 - [x] Admin console log fallback for local deployments without SMTP
+
+## Documentation
+- [x] Write README.md with local setup, environment variables, SMTP config, and contribution guide
+- [x] Add MIT LICENSE file
+
+## Agentmail.to Integration
+- [x] Read Agentmail skill and configure API
+- [x] Replace/supplement nodemailer with Agentmail.to for password reset emails (primary provider)
+- [x] Add AGENTMAIL_API_KEY, AGENTMAIL_INBOX_ID, AGENTMAIL_INBOX_USERNAME environment variables
+- [x] Write vitest tests for AgentMail service
+
+## Docker & Deployment
+- [x] Create multi-arch Dockerfile (amd64, arm64, arm/v7 for Raspberry Pi 3B)
+- [x] Create .dockerignore
+- [x] Create docker-compose.yml with MySQL and app services
+- [x] Create k3s Kubernetes manifests (namespace, secrets, mysql StatefulSet, app Deployment, Traefik Ingress)
+- [x] Create deploy/k3s/README.md with full k3s deployment guide
+- [x] Update README.md with all deployment options (Docker Compose, Pi 3B standalone, k3s)

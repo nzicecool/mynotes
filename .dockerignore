@@ -1,0 +1,39 @@
+# Dependencies (reinstalled inside Docker)
+node_modules/
+
+# Build output (generated during Docker build)
+dist/
+client/dist/
+
+# Development and test files
+.manus-logs/
+.webdev/
+*.test.ts
+*.spec.ts
+
+# Environment files — NEVER bake secrets into the image
+.env
+.env.*
+!.env.example
+
+# Version control
+.git/
+.gitignore
+
+# Editor and OS artefacts
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Documentation (not needed at runtime)
+README.md
+CHANGELOG.md
+docs/
+deploy/

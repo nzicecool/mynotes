@@ -1,0 +1,114 @@
+---
+# MyNotes — MySQL 8 StatefulSet
+#
+# Uses a PersistentVolumeClaim backed by k3s's default local-path provisioner.
+# On Raspberry Pi 3B, data is stored on the SD card or an attached USB drive.
+#
+# To use an external USB drive on Pi, configure the local-path provisioner
+# to use /mnt/usb instead of /var/lib/rancher/k3s/storage:
+#   https://rancher.com/docs/k3s/latest/en/storage/
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mynotes-mysql
+  namespace: mynotes
+  labels:
+    app.kubernetes.io/name: mynotes-mysql
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: mynotes
+spec:
+  serviceName: mynotes-mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mynotes-mysql
+  template:
+    metadata:
+      labels:
+        app: mynotes-mysql
+    spec:
+      containers:
+        - name: mysql
+          # ARM32v7 (Raspberry Pi 3B): use arm32v7/mysql:8.0
+          # ARM64  (Raspberry Pi 4):   use mysql:8.0 (official image is multi-arch)
+          # AMD64  (standard server):  use mysql:8.0
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+              name: mysql
+          env:
+            - name: MYSQL_DATABASE
+              value: mynotes
+            - name: MYSQL_USER
+              value: mynotes
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mynotes-secrets
+                  key: MYSQL_PASSWORD
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mynotes-secrets
+                  key: MYSQL_ROOT_PASSWORD
+          # Tune MySQL for low-memory environments (Raspberry Pi 3B has 1 GB RAM)
+          args:
+            - --innodb-buffer-pool-size=128M
+            - --max-connections=50
+            - --performance-schema=OFF
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - mysqladmin
+                - ping
+                - -h
+                - localhost
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - mysqladmin
+                - ping
+                - -h
+                - localhost
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+# Headless service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: mynotes-mysql
+  namespace: mynotes
+  labels:
+    app.kubernetes.io/name: mynotes-mysql
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: mynotes
+spec:
+  selector:
+    app: mynotes-mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+      name: mysql
+  clusterIP: None

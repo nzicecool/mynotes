@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./cookies";
 import { createLocalSessionToken } from "./localAuth";
+import { sendEmailViaAgentMail, isAgentMailConfigured } from "./agentmailService";
 import * as db from "../db";
 
 /** Token TTL: 1 hour */
@@ -155,7 +156,57 @@ export function registerLocalAuthRoutes(app: Express) {
       console.log("[PasswordReset] Expires at:", expiresAt.toISOString());
       console.log("=" .repeat(60) + "\n");
 
-      // ── Optional SMTP email ──────────────────────────────────────────────
+      const emailSubject = "Reset your MyNotes password";
+      const emailText = `Click the link below to reset your password (valid for 1 hour):\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`;
+      const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #1e293b; border-radius: 12px; padding: 40px; border: 1px solid #334155; }
+    .logo { font-size: 24px; font-weight: 700; color: #6366f1; margin-bottom: 24px; }
+    h1 { font-size: 20px; font-weight: 600; color: #f1f5f9; margin: 0 0 16px; }
+    p { color: #94a3b8; line-height: 1.6; margin: 0 0 16px; }
+    .btn { display: inline-block; background: #6366f1; color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 8px 0 24px; }
+    .link { color: #6366f1; word-break: break-all; font-size: 13px; }
+    .footer { margin-top: 32px; padding-top: 24px; border-top: 1px solid #334155; color: #475569; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">📝 MyNotes</div>
+    <h1>Reset your password</h1>
+    <p>We received a request to reset the password for your MyNotes account associated with <strong>${email}</strong>.</p>
+    <p>Click the button below to choose a new password. This link is valid for <strong>1 hour</strong>.</p>
+    <a href="${resetUrl}" class="btn">Reset Password</a>
+    <p>Or copy and paste this link into your browser:</p>
+    <p class="link">${resetUrl}</p>
+    <div class="footer">
+      If you did not request a password reset, you can safely ignore this email.
+      Your password will not be changed.
+    </div>
+  </div>
+</body>
+</html>`;
+
+      // ── 1. Try AgentMail.to (primary) ────────────────────────────────────
+      if (isAgentMailConfigured()) {
+        const sent = await sendEmailViaAgentMail({
+          to: email,
+          toName: user.name ?? undefined,
+          subject: emailSubject,
+          text: emailText,
+          html: emailHtml,
+        });
+        if (sent) {
+          console.log("[PasswordReset] Email sent via AgentMail to", email);
+          return;
+        }
+        console.warn("[PasswordReset] AgentMail delivery failed, trying SMTP fallback...");
+      }
+
+      // ── 2. Optional SMTP fallback ─────────────────────────────────────────
       if (process.env.SMTP_HOST) {
         try {
           const nodemailer = await import("nodemailer");
@@ -170,13 +221,13 @@ export function registerLocalAuthRoutes(app: Express) {
           await transporter.sendMail({
             from: process.env.SMTP_FROM ?? `"MyNotes" <noreply@mynotes.local>`,
             to: email,
-            subject: "Reset your MyNotes password",
-            text: `Click the link below to reset your password (valid for 1 hour):\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
-            html: `<p>Click the link below to reset your password (valid for <strong>1 hour</strong>):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, ignore this email.</p>`,
+            subject: emailSubject,
+            text: emailText,
+            html: emailHtml,
           });
-          console.log("[PasswordReset] Email sent to", email);
+          console.log("[PasswordReset] Email sent via SMTP to", email);
         } catch (emailErr) {
-          console.error("[PasswordReset] Failed to send email:", emailErr);
+          console.error("[PasswordReset] SMTP delivery failed:", emailErr);
         }
       }
     } catch (err) {

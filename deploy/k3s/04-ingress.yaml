@@ -1,0 +1,44 @@
+---
+# MyNotes — Traefik Ingress (k3s default ingress controller)
+#
+# Option A: HTTP only (local network / home lab)
+#   Replace mynotes.local with your Pi's hostname or IP.
+#   Add to /etc/hosts on client machines:
+#     192.168.1.xxx  mynotes.local
+#
+# Option B: HTTPS with Let's Encrypt (requires a public domain)
+#   Uncomment the cert-manager annotations and tls section below.
+#   Install cert-manager first:
+#     kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mynotes-ingress
+  namespace: mynotes
+  labels:
+    app.kubernetes.io/name: mynotes-ingress
+    app.kubernetes.io/part-of: mynotes
+  annotations:
+    # Traefik-specific annotations
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    # Uncomment for HTTPS with cert-manager + Let's Encrypt:
+    # traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  # Uncomment for HTTPS:
+  # tls:
+  #   - hosts:
+  #       - mynotes.yourdomain.com
+  #     secretName: mynotes-tls
+  rules:
+    # Replace with your hostname or Pi's IP address
+    - host: mynotes.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mynotes-app
+                port:
+                  name: http

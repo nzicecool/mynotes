@@ -1,0 +1,90 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# MyNotes — Docker Compose
+#
+# Usage:
+#   1. Copy .env.example to .env and fill in your values
+#   2. docker compose up -d
+#   3. Open http://localhost:3000
+#
+# For Raspberry Pi 3B (ARMv7), build the image first:
+#   docker buildx build --platform linux/arm/v7 -t mynotes:latest .
+#   Then set IMAGE=mynotes:latest in your .env
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── MySQL 8 database ────────────────────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    # For Raspberry Pi 3B (ARM32v7), use the arm32v7 variant:
+    # image: arm32v7/mysql:8.0
+    container_name: mynotes-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-mynotes}
+      MYSQL_USER: ${MYSQL_USER:-mynotes}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      # Expose only on localhost — remove this in production
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-changeme_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - mynotes-net
+
+  # ── MyNotes application ──────────────────────────────────────────────────────
+  app:
+    image: ${IMAGE:-mynotes:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Uncomment for Raspberry Pi 3B:
+      # platforms:
+      #   - linux/arm/v7
+    container_name: mynotes-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Database — connects to the db service above
+      DATABASE_URL: mysql://${MYSQL_USER:-mynotes}:${MYSQL_PASSWORD:-changeme}@db:3306/${MYSQL_DATABASE:-mynotes}
+      # JWT secret — MUST be changed in production
+      JWT_SECRET: ${JWT_SECRET:-change_this_to_a_long_random_string_in_production}
+      # AgentMail.to (optional — for password reset emails)
+      AGENTMAIL_API_KEY: ${AGENTMAIL_API_KEY:-}
+      AGENTMAIL_INBOX_ID: ${AGENTMAIL_INBOX_ID:-}
+      AGENTMAIL_INBOX_USERNAME: ${AGENTMAIL_INBOX_USERNAME:-mynotes-noreply}
+      # SMTP fallback (optional)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mynotes-net
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  mynotes-net:
+    driver: bridge
