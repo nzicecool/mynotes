@@ -132,12 +132,11 @@
 - [x] Update README.md with all deployment options (Docker Compose, Pi 3B standalone, k3s)
 
 ## SQLite Dual-Driver Support
-- [ ] Install better-sqlite3 and @types/better-sqlite3
-- [ ] Create drizzle/schema.sqlite.ts with SQLite-compatible schema
-- [ ] Update db.ts to initialise either SQLite or MySQL based on DATABASE_DRIVER env var
-- [ ] Update db:push script to support both drivers
-- [ ] Create docker-compose.pi.yml (single container, SQLite, ARM32v7)
-- [ ] Update Dockerfile to include SQLite build dependencies
-- [ ] Update README.md with SQLite setup instructions
-- [ ] Update deploy/k3s/README.md with SQLite option for Pi
-- [ ] Write vitest tests for SQLite driver path
+- [x] Install better-sqlite3 and @types/better-sqlite3
+- [x] Create drizzle/schema.sqlite.ts with SQLite-compatible schema
+- [x] Update db.ts to initialise either SQLite or MySQL based on DATABASE_DRIVER env var
+- [x] Update db:push script to support both drivers
+- [x] Create docker-compose.pi.yml (single container, SQLite, ARM32v7)
+- [x] Update Dockerfile to include SQLite build dependencies
+- [x] Update README.md with SQLite setup instructions
+- [x] Update deploy/k3s/README.md with SQLite option for Pi
