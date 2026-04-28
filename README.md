@@ -66,32 +66,43 @@ pnpm install
 cp .env.example .env
 ```
 
-Open `.env` and set at minimum:
+Open `.env` and choose your database backend:
 
-**MySQL (default):**
+**MySQL (default — recommended for multi-user / server deployments):**
 ```env
+DATABASE_DRIVER=mysql
 DATABASE_URL=mysql://user:password@localhost:3306/mynotes
 JWT_SECRET=your_long_random_secret_here
 ```
 
-**SQLite (recommended for Raspberry Pi / single-user):**
+Generate a strong `JWT_SECRET` with:
+```bash
+openssl rand -hex 32
+```
+
+**SQLite (recommended for Raspberry Pi 3B, laptops, and single-user local deployments):**
 ```env
 DATABASE_DRIVER=sqlite
 SQLITE_PATH=./data/mynotes.db
 JWT_SECRET=your_long_random_secret_here
 ```
-No `DATABASE_URL` is required when using SQLite.
+
+No `DATABASE_URL` is required when using SQLite. The `./data/` directory is created automatically on first startup. If you prefer an explicit location (e.g. on an external drive), set `SQLITE_PATH` to an absolute path such as `/mnt/usb/mynotes.db`.
 
 See the [Environment Variables](#environment-variables) section for a full reference.
 
 ### 4. Set up the database
 
-**MySQL:**
+**MySQL:** Push the Drizzle schema to your MySQL instance:
 ```bash
 pnpm db:push
 ```
+Ensure your MySQL server is running and the `DATABASE_URL` credentials are correct before running this command.
 
-**SQLite:** No migration step needed. The schema is created automatically when the server starts for the first time.
+**SQLite:** No migration step is needed. The schema is created automatically when the server starts for the first time. You will see a log line similar to:
+```
+[Database] SQLite initialised at ./data/mynotes.db
+```
 
 ### 5. Start the development server
 
@@ -100,6 +111,8 @@ pnpm dev
 ```
 
 Open **http://localhost:3000**, navigate to `/register` to create your account, then set up your encryption password at `/setup`.
+
+> **Tip:** For a production local build, run `pnpm build && pnpm start` instead of `pnpm dev`. The production server is significantly faster and does not include hot-reload overhead.
 
 ---
 
@@ -281,13 +294,72 @@ docker compose -f docker-compose.pi.yml start
 
 ### Option 2: Raspberry Pi 3B — Standalone Docker
 
-If you prefer to run the containers individually without Docker Compose:
+If you prefer to run containers individually without Docker Compose, you have two sub-options depending on whether you want MySQL or the lighter SQLite backend.
+
+#### Option 2a: SQLite (Recommended for Pi 3B — single container, ~330 MB RAM)
+
+SQLite requires no separate database container, making it the best fit for the Pi 3B's 1 GB RAM. The database is stored as a single file in a named Docker volume.
+
+```bash
+# 1. Build the MyNotes image for ARMv7 (run on your workstation with buildx)
+docker buildx build --platform linux/arm/v7 -t mynotes:latest --load .
+
+# 2. Transfer the image to the Pi
+docker save mynotes:latest | ssh pi@raspberrypi.local "docker load"
+
+# 3. On the Pi — create a named volume for the SQLite database file
+ssh pi@raspberrypi.local
+docker volume create mynotes_sqlite_data
+
+# 4. Start the app (single container, no network needed)
+docker run -d \
+  --name mynotes-app \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e DATABASE_DRIVER=sqlite \
+  -e SQLITE_PATH=/app/data/mynotes.db \
+  -e JWT_SECRET="$(openssl rand -hex 32)" \
+  -e AGENTMAIL_API_KEY="your_agentmail_key" \
+  -v mynotes_sqlite_data:/app/data \
+  mynotes:latest
+
+# 5. Open http://raspberrypi.local:3000
+```
+
+**Backup your SQLite database:**
+```bash
+docker cp mynotes-app:/app/data/mynotes.db ./backup-$(date +%Y%m%d).db
+```
+
+**Restore from backup:**
+```bash
+docker stop mynotes-app
+docker cp ./backup.db mynotes-app:/app/data/mynotes.db
+docker start mynotes-app
+```
+
+**Resource usage (SQLite, Pi 3B):**
+
+| Component | Approx. RAM |
+|---|---|
+| mynotes-app | ~150–200 MB |
+| OS + Docker daemon | ~200 MB |
+| **Total** | **~350–400 MB** |
+
+This leaves ~600 MB free on the Pi 3B — comfortable headroom for the OS and other lightweight services.
+
+---
+
+#### Option 2b: MySQL / MariaDB (Two containers — use when you need multi-user concurrency)
+
+If you need MySQL for a shared or multi-user deployment, run MariaDB (ARM32v7-compatible) alongside the app:
 
 ```bash
 # 1. Create a Docker network
 docker network create mynotes-net
 
-# 2. Start MySQL (use MariaDB for ARM32v7 compatibility)
+# 2. Start MariaDB (ARM32v7 compatible)
 docker run -d \
   --name mynotes-db \
   --network mynotes-net \
@@ -297,18 +369,24 @@ docker run -d \
   -e MYSQL_USER=mynotes \
   -e MYSQL_PASSWORD=changeme \
   -v mynotes_db_data:/var/lib/mysql \
+  --innodb-buffer-pool-size=128M \
+  --max-connections=50 \
   mariadb:10.11
 
-# 3. Build the MyNotes image for ARMv7
+# 3. Build the MyNotes image for ARMv7 (on your workstation)
 docker buildx build --platform linux/arm/v7 -t mynotes:latest --load .
 
-# 4. Start the app
+# 4. Transfer to the Pi and start the app
+docker save mynotes:latest | ssh pi@raspberrypi.local "docker load"
+ssh pi@raspberrypi.local
+
 docker run -d \
   --name mynotes-app \
   --network mynotes-net \
   --restart unless-stopped \
   -p 3000:3000 \
   -e NODE_ENV=production \
+  -e DATABASE_DRIVER=mysql \
   -e DATABASE_URL="mysql://mynotes:changeme@mynotes-db:3306/mynotes" \
   -e JWT_SECRET="your_long_random_secret" \
   -e AGENTMAIL_API_KEY="your_agentmail_key" \
@@ -317,9 +395,16 @@ docker run -d \
 # 5. Open http://raspberrypi.local:3000
 ```
 
-**Resource tips for Pi 3B (1 GB RAM):**
-- Limit MySQL memory: add `--innodb-buffer-pool-size=128M --max-connections=50` to the MariaDB command
-- Avoid running other memory-intensive containers on the same Pi
+**Resource usage (MySQL, Pi 3B):**
+
+| Component | Approx. RAM |
+|---|---|
+| mynotes-app | ~150–200 MB |
+| MariaDB (tuned) | ~200–300 MB |
+| OS + Docker daemon | ~200 MB |
+| **Total** | **~550–700 MB** |
+
+> **Tip:** The `--innodb-buffer-pool-size=128M --max-connections=50` flags are critical on the Pi 3B. Without them, MariaDB may consume 400+ MB and leave insufficient RAM for the app.
 
 ---
 

@@ -140,3 +140,7 @@
 - [x] Update Dockerfile to include SQLite build dependencies
 - [x] Update README.md with SQLite setup instructions
 - [x] Update deploy/k3s/README.md with SQLite option for Pi
+
+## Documentation Updates
+- [x] Add SQLite instructions to Pi 3B Standalone Docker section in README.md (Option 2a/2b)
+- [x] Expand Local Setup section with SQLite env config, data dir note, and production tip
