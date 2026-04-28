@@ -26,7 +26,7 @@
 |---|---|
 | Frontend | React 19, Tailwind CSS 4, shadcn/ui, TipTap, Wouter |
 | Backend | Node.js 22, Express 4, tRPC 11 |
-| Database | MySQL 8 (via Drizzle ORM) |
+| Database | MySQL 8 **or** SQLite 3 (selectable via `DATABASE_DRIVER` env var) |
 | Auth | bcryptjs, JWT (jose), HTTP-only cookies |
 | Email | AgentMail.to (primary), Nodemailer/SMTP (fallback) |
 | Testing | Vitest |
@@ -40,7 +40,8 @@
 
 - **Node.js** v22 or later — [nodejs.org](https://nodejs.org)
 - **pnpm** v10 or later — `npm install -g pnpm`
-- **MySQL** 8.0+ (or Docker — see deployment options below)
+- **MySQL** 8.0+ — for multi-user / server deployments
+- **SQLite** — built-in, zero-setup; recommended for Raspberry Pi and single-user deployments (no MySQL needed)
 
 ---
 
@@ -67,18 +68,30 @@ cp .env.example .env
 
 Open `.env` and set at minimum:
 
+**MySQL (default):**
 ```env
 DATABASE_URL=mysql://user:password@localhost:3306/mynotes
 JWT_SECRET=your_long_random_secret_here
 ```
 
+**SQLite (recommended for Raspberry Pi / single-user):**
+```env
+DATABASE_DRIVER=sqlite
+SQLITE_PATH=./data/mynotes.db
+JWT_SECRET=your_long_random_secret_here
+```
+No `DATABASE_URL` is required when using SQLite.
+
 See the [Environment Variables](#environment-variables) section for a full reference.
 
 ### 4. Set up the database
 
+**MySQL:**
 ```bash
 pnpm db:push
 ```
+
+**SQLite:** No migration step needed. The schema is created automatically when the server starts for the first time.
 
 ### 5. Start the development server
 
@@ -98,7 +111,9 @@ All variables are documented in `.env.example`.
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | MySQL connection string, e.g. `mysql://user:pass@localhost:3306/mynotes` |
+| `DATABASE_DRIVER` | `mysql` (default) or `sqlite`. Selects the database backend. |
+| `DATABASE_URL` | MySQL connection string. Required when `DATABASE_DRIVER=mysql`. e.g. `mysql://user:pass@localhost:3306/mynotes` |
+| `SQLITE_PATH` | Path to the SQLite database file. Used when `DATABASE_DRIVER=sqlite`. Default: `./data/mynotes.db` |
 | `JWT_SECRET` | Secret for signing JWT tokens. Generate with: `openssl rand -hex 32` |
 
 ### Email — AgentMail.to (Recommended)
@@ -198,7 +213,7 @@ Copy the URL from the console and open it in a browser to complete the reset.
 
 ## Deployment
 
-### Option 1: Docker Compose (Recommended for most users)
+### Option 1: Docker Compose — MySQL (Recommended for multi-user / server deployments)
 
 The included `docker-compose.yml` starts MyNotes and MySQL together with a single command.
 
@@ -226,27 +241,41 @@ open http://localhost:3000
 To stop: `docker compose down`  
 To stop and remove data: `docker compose down -v`
 
-#### Docker Compose for Raspberry Pi 3B
+### Option 1b: Docker Compose — SQLite (Recommended for Raspberry Pi 3B / single-user)
 
-The Pi 3B uses a 32-bit ARMv7 CPU. Build the image on your workstation using Docker Buildx:
+The included `docker-compose.pi.yml` runs a **single container** with SQLite. No separate database container is needed, making it ideal for the Pi 3B's 1 GB RAM.
 
 ```bash
-# Enable multi-platform builds (once per machine)
-docker buildx create --use --name mybuilder
+# 1. Copy and edit the Pi environment file
+cp .env.example .env.pi
+nano .env.pi   # set JWT_SECRET and optionally AGENTMAIL_API_KEY
 
-# Build the ARM32v7 image and load it locally
+# 2. Build the ARM32v7 image on your workstation
+docker buildx create --use --name mybuilder
 docker buildx build --platform linux/arm/v7 -t mynotes:latest --load .
 
-# Transfer to the Pi (or push to a registry and pull on the Pi)
+# 3. Transfer to the Pi
 docker save mynotes:latest | ssh pi@raspberrypi.local "docker load"
 
-# On the Pi, start with Docker Compose
+# 4. On the Pi, start with the Pi Compose file
 ssh pi@raspberrypi.local
-cd ~/mynotes
-docker compose up -d
+git clone https://github.com/nzicecool/mynotes.git && cd mynotes
+docker compose -f docker-compose.pi.yml --env-file .env.pi up -d
+
+# 5. Open http://raspberrypi.local:3000
 ```
 
-> **Note:** MySQL does not publish an official `arm/v7` image. Use `biarms/mysql:5.7` or `mariadb:10.11` as a drop-in replacement on the Pi 3B. Edit the `db.image` field in `docker-compose.yml` accordingly.
+**Backup your SQLite database:**
+```bash
+docker compose -f docker-compose.pi.yml cp mynotes:/app/data/mynotes.db ./backup-$(date +%Y%m%d).db
+```
+
+**Restore from backup:**
+```bash
+docker compose -f docker-compose.pi.yml stop
+docker compose -f docker-compose.pi.yml cp ./backup.db mynotes:/app/data/mynotes.db
+docker compose -f docker-compose.pi.yml start
+```
 
 ---
 

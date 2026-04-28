@@ -1,0 +1,62 @@
+# docker-compose.pi.yml — Raspberry Pi 3B (arm/v7) deployment
+#
+# Uses SQLite as the database (no separate MySQL container needed).
+# Optimised for 1 GB RAM constraint of the Raspberry Pi 3B.
+#
+# Usage:
+#   cp .env.example .env.pi && nano .env.pi   # fill in your secrets
+#   docker compose -f docker-compose.pi.yml --env-file .env.pi up -d
+#
+# Backup your notes:
+#   docker compose -f docker-compose.pi.yml cp mynotes:/app/data/mynotes.db ./backup.db
+
+version: "3.9"
+
+services:
+  mynotes:
+    image: ghcr.io/nzicecool/mynotes:latest
+    container_name: mynotes
+    platform: linux/arm/v7
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # ── Database (SQLite) ───────────────────────────────────────────────────
+      DATABASE_DRIVER: sqlite
+      SQLITE_PATH: /app/data/mynotes.db
+
+      # ── App ────────────────────────────────────────────────────────────────
+      NODE_ENV: production
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+
+      # ── AgentMail (optional — for password reset emails) ───────────────────
+      AGENTMAIL_API_KEY: ${AGENTMAIL_API_KEY:-}
+      AGENTMAIL_INBOX_ID: ${AGENTMAIL_INBOX_ID:-}
+      AGENTMAIL_INBOX_USERNAME: ${AGENTMAIL_INBOX_USERNAME:-}
+
+      # ── SMTP fallback (optional) ────────────────────────────────────────────
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+
+    volumes:
+      # Persist the SQLite database file on the host
+      - ./data:/app/data
+
+    # Memory limits tuned for Pi 3B (1 GB total RAM)
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 128m
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

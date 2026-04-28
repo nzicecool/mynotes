@@ -7,6 +7,7 @@ import { registerLocalAuthRoutes } from "./localAuthRoutes";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { initSqliteSchema } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -28,6 +29,11 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Initialise SQLite schema if using SQLite driver
+  if ((process.env.DATABASE_DRIVER ?? "mysql").toLowerCase() === "sqlite") {
+    await initSqliteSchema();
+  }
+
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads

@@ -26,6 +26,9 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 COPY patches/ ./patches/
 
+# Install build tools needed for better-sqlite3 native bindings
+RUN apk add --no-cache python3 make g++
+
 # Install all dependencies (including devDependencies for the build step)
 RUN pnpm install --frozen-lockfile
 
@@ -57,6 +60,9 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
+# Create the data directory for SQLite (used when DATABASE_DRIVER=sqlite)
+RUN mkdir -p /app/data && chown mynotes:nodejs /app/data
+
 # Copy only what is needed to run
 COPY --from=builder --chown=mynotes:nodejs /app/dist      ./dist
 COPY --from=builder --chown=mynotes:nodejs /app/node_modules ./node_modules
@@ -64,6 +70,9 @@ COPY --from=builder --chown=mynotes:nodejs /app/package.json ./package.json
 
 # The Vite build output is served as static files by the Express server
 COPY --from=builder --chown=mynotes:nodejs /app/client/dist ./client/dist
+
+# SQLite data volume mount point
+VOLUME ["/app/data"]
 
 USER mynotes
 

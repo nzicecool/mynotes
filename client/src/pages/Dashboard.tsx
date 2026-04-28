@@ -62,7 +62,8 @@ export default function Dashboard() {
   const [pendingType, setPendingType] = useState<NoteType>("plain");
 
   // Data
-  const { data: notes = [], refetch: refetchNotes } = trpc.notes.list.useQuery();
+  type NoteItem = { id: number; title: string | null; encryptedContent: string; noteType: string; isPinned: number; isArchived: number; isTrashed: number; createdAt: Date; updatedAt: Date; userId: number };
+  const { data: notes = [] as NoteItem[], refetch: refetchNotes } = trpc.notes.list.useQuery();
   const createNoteMutation = trpc.notes.create.useMutation();
   const updateNoteMutation = trpc.notes.update.useMutation();
   const deleteNoteMutation = trpc.notes.delete.useMutation();
@@ -148,7 +149,7 @@ export default function Dashboard() {
   };
 
   const handleSelectNote = async (noteId: number) => {
-    const note = notes.find((n) => n.id === noteId);
+    const note = notes.find((n: NoteItem) => n.id === noteId);
     if (!note) return;
 
     const key = getKey();
@@ -205,7 +206,7 @@ export default function Dashboard() {
 
   // ─── Derived ─────────────────────────────────────────────────────────────────
 
-  const filteredNotes = notes.filter((note) =>
+  const filteredNotes = notes.filter((note: NoteItem) =>
     (note.title?.toLowerCase() || "").includes(searchQuery.toLowerCase())
   );
 
@@ -261,7 +262,7 @@ export default function Dashboard() {
                   <p className="text-xs mt-1">Click "New Note" to get started</p>
                 </div>
               ) : (
-                filteredNotes.map((note) => {
+                filteredNotes.map((note: NoteItem) => {
                   const typeMeta = NOTE_TYPES.find((t) => t.type === note.noteType);
                   const Icon = typeMeta?.icon ?? FileText;
                   return (

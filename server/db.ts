@@ -1,103 +1,142 @@
-import { and, eq, gt } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+/**
+ * db.ts — Dual-driver database module
+ *
+ * Selects the database driver at startup based on DATABASE_DRIVER env var:
+ *   DATABASE_DRIVER=sqlite  → better-sqlite3 + drizzle-orm/better-sqlite3
+ *   DATABASE_DRIVER=mysql   → mysql2 + drizzle-orm/mysql2  (default)
+ *
+ * SQLite is recommended for Raspberry Pi / single-user / air-gapped deployments.
+ * MySQL is recommended for multi-user / server / team deployments.
+ *
+ * SQLite database file location is controlled by SQLITE_PATH (default: ./data/mynotes.db)
+ */
 
-let _db: ReturnType<typeof drizzle> | null = null;
+import { and, eq, gt, desc } from "drizzle-orm";
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+// ─── Driver type union ────────────────────────────────────────────────────────
+
+type AnyDb =
+  | ReturnType<typeof import("drizzle-orm/mysql2").drizzle>
+  | ReturnType<typeof import("drizzle-orm/better-sqlite3").drizzle>;
+
+let _db: AnyDb | null = null;
+let _driver: "mysql" | "sqlite" | null = null;
+
+function getDriver(): "mysql" | "sqlite" {
+  const d = (process.env.DATABASE_DRIVER ?? "mysql").toLowerCase();
+  return d === "sqlite" ? "sqlite" : "mysql";
+}
+
+// ─── Lazy initialisation ──────────────────────────────────────────────────────
+
+export async function getDb(): Promise<AnyDb | null> {
+  if (_db) return _db;
+
+  _driver = getDriver();
+
+  if (_driver === "sqlite") {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      const BetterSqlite3 = (await import("better-sqlite3")).default;
+      const { drizzle } = await import("drizzle-orm/better-sqlite3");
+      const path = await import("path");
+      const fs = await import("fs");
+
+      const dbPath = process.env.SQLITE_PATH ?? "./data/mynotes.db";
+      const dir = path.dirname(dbPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+      const sqlite = new BetterSqlite3(dbPath);
+      // Enable WAL mode for better concurrent read performance
+      sqlite.pragma("journal_mode = WAL");
+      sqlite.pragma("foreign_keys = ON");
+
+      _db = drizzle(sqlite) as AnyDb;
+      console.log(`[Database] SQLite connected: ${dbPath}`);
+    } catch (err) {
+      console.error("[Database] SQLite init failed:", err);
+      _db = null;
+    }
+  } else {
+    if (!process.env.DATABASE_URL) return null;
+    try {
+      const { drizzle } = await import("drizzle-orm/mysql2");
+      _db = drizzle(process.env.DATABASE_URL) as AnyDb;
+      console.log("[Database] MySQL connected");
+    } catch (err) {
+      console.warn("[Database] MySQL init failed:", err);
       _db = null;
     }
   }
+
   return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
+// ─── Schema imports (driver-aware) ────────────────────────────────────────────
+
+async function getSchema() {
+  if (getDriver() === "sqlite") {
+    return import("../drizzle/schema.sqlite");
   }
+  return import("../drizzle/schema");
+}
 
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+// ─── SQLite-safe upsert helpers ───────────────────────────────────────────────
 
-  try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
+/**
+ * For SQLite we cannot use onDuplicateKeyUpdate (MySQL-only).
+ * We use INSERT OR REPLACE instead via a raw approach, or check-then-insert/update.
+ */
+async function sqliteUpsert(
+  db: AnyDb,
+  table: any,
+  whereClause: any,
+  insertValues: any,
+  updateValues: any
+) {
+  const existing = await (db as any).select().from(table).where(whereClause).limit(1);
+  if (existing.length > 0) {
+    await (db as any).update(table).set({ ...updateValues, updatedAt: new Date() }).where(whereClause);
+  } else {
+    await (db as any).insert(table).values(insertValues);
   }
 }
 
-/** Look up a user by email address (for local auth) */
+// ─── User helpers ─────────────────────────────────────────────────────────────
+
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const { users } = await getSchema();
+  const result = await (db as any).select().from(users).where(eq(users.email, email)).limit(1);
   return result[0];
 }
 
-/** Look up a user by numeric id */
 export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  const { users } = await getSchema();
+  const result = await (db as any).select().from(users).where(eq(users.id, id)).limit(1);
   return result[0];
 }
 
-/** Create a new local-auth user with a bcrypt password hash */
-export async function createLocalUser(data: { name: string; email: string; passwordHash: string; role?: "user" | "admin" }) {
+export async function getUserByOpenId(openId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const { users } = await getSchema();
+  const result = await (db as any).select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result[0];
+}
+
+export async function createLocalUser(data: {
+  name: string;
+  email: string;
+  passwordHash: string;
+  role?: "user" | "admin";
+}) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(users).values({
+  const { users } = await getSchema();
+  const result = await (db as any).insert(users).values({
     name: data.name,
     email: data.email,
     passwordHash: data.passwordHash,
@@ -108,177 +147,295 @@ export async function createLocalUser(data: { name: string; email: string; passw
   return result;
 }
 
-export async function getUserByOpenId(openId: string) {
+export async function updateUserPassword(userId: number, passwordHash: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  if (!db) throw new Error("Database not available");
+  const { users } = await getSchema();
+  await (db as any).update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
 }
 
-/**
- * Notes queries
- */
+/** Legacy upsert kept for OAuth compatibility */
+export async function upsertUser(user: any): Promise<void> {
+  if (!user.openId) throw new Error("User openId is required for upsert");
+  const db = await getDb();
+  if (!db) return;
+  const { users } = await getSchema();
+  const updateSet: Record<string, unknown> = {};
+  for (const field of ["name", "email", "loginMethod"] as const) {
+    if (user[field] !== undefined) updateSet[field] = user[field] ?? null;
+  }
+  if (user.lastSignedIn) updateSet.lastSignedIn = user.lastSignedIn;
+  if (user.role) updateSet.role = user.role;
+  updateSet.updatedAt = new Date();
+
+  if (getDriver() === "sqlite") {
+    await sqliteUpsert(
+      db,
+      users,
+      eq(users.openId, user.openId),
+      { ...user, lastSignedIn: user.lastSignedIn ?? new Date() },
+      updateSet
+    );
+  } else {
+    await (db as any).insert(users).values({ ...user, lastSignedIn: user.lastSignedIn ?? new Date() })
+      .onDuplicateKeyUpdate({ set: updateSet });
+  }
+}
+
+// ─── Notes helpers ────────────────────────────────────────────────────────────
+
 export async function getNotesByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  const { notes } = await import("../drizzle/schema");
-  const { eq, and } = await import("drizzle-orm");
-  return db.select().from(notes).where(and(eq(notes.userId, userId), eq(notes.isTrashed, 0)));
+  const { notes } = await getSchema();
+  return (db as any).select().from(notes).where(and(eq(notes.userId, userId), eq(notes.isTrashed, 0)));
 }
 
 export async function getNoteById(noteId: number, userId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const { notes } = await import("../drizzle/schema");
-  const { eq, and } = await import("drizzle-orm");
-  const result = await db.select().from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, userId))).limit(1);
+  const { notes } = await getSchema();
+  const result = await (db as any).select().from(notes)
+    .where(and(eq(notes.id, noteId), eq(notes.userId, userId))).limit(1);
   return result[0];
 }
 
-export async function createNote(note: { userId: number; title?: string; encryptedContent: string; noteType: "plain" | "rich" | "markdown" | "checklist" | "code" | "spreadsheet" }) {
+export async function createNote(note: {
+  userId: number;
+  title?: string;
+  encryptedContent: string;
+  noteType: "plain" | "rich" | "markdown" | "checklist" | "code" | "spreadsheet";
+}) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { notes } = await import("../drizzle/schema");
-  const result = await db.insert(notes).values(note);
-  return result;
+  const { notes } = await getSchema();
+  return (db as any).insert(notes).values(note);
 }
 
-export async function updateNote(noteId: number, userId: number, updates: { title?: string; encryptedContent?: string; isPinned?: number; isArchived?: number; isTrashed?: number }) {
+export async function updateNote(
+  noteId: number,
+  userId: number,
+  updates: { title?: string; encryptedContent?: string; isPinned?: number; isArchived?: number; isTrashed?: number }
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { notes } = await import("../drizzle/schema");
-  const { eq, and } = await import("drizzle-orm");
-  await db.update(notes).set(updates).where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
+  const { notes } = await getSchema();
+  await (db as any).update(notes)
+    .set({ ...updates, updatedAt: new Date() })
+    .where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
 }
 
 export async function deleteNote(noteId: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { notes } = await import("../drizzle/schema");
-  const { eq, and } = await import("drizzle-orm");
-  await db.delete(notes).where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
+  const { notes } = await getSchema();
+  await (db as any).delete(notes).where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
 }
 
-/**
- * Tags queries
- */
+// ─── Tags helpers ─────────────────────────────────────────────────────────────
+
 export async function getTagsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  const { tags } = await import("../drizzle/schema");
-  const { eq } = await import("drizzle-orm");
-  return db.select().from(tags).where(eq(tags.userId, userId));
+  const { tags } = await getSchema();
+  return (db as any).select().from(tags).where(eq(tags.userId, userId));
 }
 
 export async function createTag(tag: { userId: number; name: string; color?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { tags } = await import("../drizzle/schema");
-  const result = await db.insert(tags).values(tag);
-  return result;
+  const { tags } = await getSchema();
+  return (db as any).insert(tags).values(tag);
 }
 
-/**
- * Folders queries
- */
+// ─── Folders helpers ──────────────────────────────────────────────────────────
+
 export async function getFoldersByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  const { folders } = await import("../drizzle/schema");
-  const { eq } = await import("drizzle-orm");
-  return db.select().from(folders).where(eq(folders.userId, userId));
+  const { folders } = await getSchema();
+  return (db as any).select().from(folders).where(eq(folders.userId, userId));
 }
 
 export async function createFolder(folder: { userId: number; name: string; parentId?: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { folders } = await import("../drizzle/schema");
-  const result = await db.insert(folders).values(folder);
-  return result;
+  const { folders } = await getSchema();
+  return (db as any).insert(folders).values(folder);
 }
 
-/**
- * Revisions queries
- */
+// ─── Revisions helpers ────────────────────────────────────────────────────────
+
 export async function getRevisionsByNoteId(noteId: number) {
   const db = await getDb();
   if (!db) return [];
-  const { revisions } = await import("../drizzle/schema");
-  const { eq, desc } = await import("drizzle-orm");
-  return db.select().from(revisions).where(eq(revisions.noteId, noteId)).orderBy(desc(revisions.createdAt));
+  const { revisions } = await getSchema();
+  return (db as any).select().from(revisions)
+    .where(eq(revisions.noteId, noteId))
+    .orderBy(desc(revisions.createdAt));
 }
 
 export async function createRevision(revision: { noteId: number; encryptedContent: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { revisions } = await import("../drizzle/schema");
-  const result = await db.insert(revisions).values(revision);
-  return result;
+  const { revisions } = await getSchema();
+  return (db as any).insert(revisions).values(revision);
 }
 
-/**
- * User settings queries
- */
+// ─── User settings helpers ────────────────────────────────────────────────────
+
 export async function getUserSettings(userId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const { userSettings } = await import("../drizzle/schema");
-  const { eq } = await import("drizzle-orm");
-  const result = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
+  const { userSettings } = await getSchema();
+  const result = await (db as any).select().from(userSettings)
+    .where(eq(userSettings.userId, userId)).limit(1);
   return result[0];
 }
 
-export async function upsertUserSettings(settings: { userId: number; saltForKeyDerivation?: string; twoFactorEnabled?: number; twoFactorSecret?: string }) {
+export async function upsertUserSettings(settings: {
+  userId: number;
+  saltForKeyDerivation?: string;
+  twoFactorEnabled?: number;
+  twoFactorSecret?: string;
+}) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { userSettings } = await import("../drizzle/schema");
-  await db.insert(userSettings).values(settings).onDuplicateKeyUpdate({ set: settings });
+  const { userSettings } = await getSchema();
+
+  if (getDriver() === "sqlite") {
+    await sqliteUpsert(
+      db,
+      userSettings,
+      eq(userSettings.userId, settings.userId),
+      { ...settings, updatedAt: new Date() },
+      { ...settings, updatedAt: new Date() }
+    );
+  } else {
+    await (db as any).insert(userSettings).values(settings)
+      .onDuplicateKeyUpdate({ set: settings });
+  }
 }
 
-/**
- * Password reset token queries
- */
+// ─── Password reset token helpers ─────────────────────────────────────────────
 
-/** Delete any existing tokens for the user, then insert a new one. */
 export async function createPasswordResetToken(userId: number, tokenHash: string, expiresAt: Date) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { passwordResetTokens } = await import("../drizzle/schema");
-  // Invalidate previous tokens for this user
-  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
-  await db.insert(passwordResetTokens).values({ userId, tokenHash, expiresAt });
+  const { passwordResetTokens } = await getSchema();
+  await (db as any).delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+  await (db as any).insert(passwordResetTokens).values({ userId, tokenHash, expiresAt });
 }
 
-/** Find a valid (non-expired) reset token record by userId. */
 export async function getValidResetTokenByUserId(userId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const { passwordResetTokens } = await import("../drizzle/schema");
+  const { passwordResetTokens } = await getSchema();
   const now = new Date();
-  const result = await db
-    .select()
-    .from(passwordResetTokens)
+  const result = await (db as any).select().from(passwordResetTokens)
     .where(and(eq(passwordResetTokens.userId, userId), gt(passwordResetTokens.expiresAt, now)))
     .limit(1);
   return result[0];
 }
 
-/** Delete all reset tokens for a user (called after successful reset). */
 export async function deleteResetTokensByUserId(userId: number) {
   const db = await getDb();
   if (!db) return;
-  const { passwordResetTokens } = await import("../drizzle/schema");
-  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+  const { passwordResetTokens } = await getSchema();
+  await (db as any).delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
 }
 
-/** Update a user's password hash (used after successful reset). */
-export async function updateUserPassword(userId: number, passwordHash: string) {
+// ─── SQLite migration helper ──────────────────────────────────────────────────
+
+/**
+ * For SQLite, drizzle-kit push is not available at runtime.
+ * This function creates all tables if they do not exist, using raw SQL.
+ * Called automatically on server startup when DATABASE_DRIVER=sqlite.
+ */
+export async function initSqliteSchema() {
+  if (getDriver() !== "sqlite") return;
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+  if (!db) return;
+
+  const sqlite = (db as any).session?.client ?? (db as any).$client;
+  if (!sqlite) return;
+
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      openId TEXT UNIQUE,
+      name TEXT,
+      email TEXT UNIQUE,
+      passwordHash TEXT,
+      loginMethod TEXT DEFAULT 'local',
+      role TEXT NOT NULL DEFAULT 'user',
+      createdAt INTEGER NOT NULL DEFAULT (unixepoch()),
+      updatedAt INTEGER NOT NULL DEFAULT (unixepoch()),
+      lastSignedIn INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      title TEXT,
+      encryptedContent TEXT NOT NULL,
+      noteType TEXT NOT NULL DEFAULT 'plain',
+      isPinned INTEGER NOT NULL DEFAULT 0,
+      isArchived INTEGER NOT NULL DEFAULT 0,
+      isTrashed INTEGER NOT NULL DEFAULT 0,
+      createdAt INTEGER NOT NULL DEFAULT (unixepoch()),
+      updatedAt INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      color TEXT,
+      createdAt INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      parentId INTEGER,
+      createdAt INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS noteTags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      noteId INTEGER NOT NULL,
+      tagId INTEGER NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS noteFolders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      noteId INTEGER NOT NULL,
+      folderId INTEGER NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS revisions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      noteId INTEGER NOT NULL,
+      encryptedContent TEXT NOT NULL,
+      createdAt INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS userSettings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL UNIQUE,
+      encryptedMasterKey TEXT,
+      saltForKeyDerivation TEXT,
+      twoFactorEnabled INTEGER NOT NULL DEFAULT 0,
+      twoFactorSecret TEXT,
+      updatedAt INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS passwordResetTokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      tokenHash TEXT NOT NULL,
+      expiresAt INTEGER NOT NULL,
+      createdAt INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+  ];
+
+  for (const sql of tables) {
+    sqlite.exec(sql);
+  }
+
+  console.log("[Database] SQLite schema initialised");
 }

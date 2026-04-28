@@ -73,7 +73,7 @@ export const appRouter = router({
         const notes = await getNotesByUserId(ctx.user.id);
         // Note: Full-text search on encrypted content is not possible
         // Search is performed on titles only
-        return notes.filter((note) =>
+        return notes.filter((note: { title: string | null; [key: string]: unknown }) =>
           note.title?.toLowerCase().includes(input.query.toLowerCase())
         );
       }),

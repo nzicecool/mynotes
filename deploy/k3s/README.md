@@ -95,7 +95,7 @@ kubectl get pods -n mynotes
 
 ## 5. Run Database Migrations
 
-After the app pod is running, execute the schema migration:
+**MySQL (default):** After the app pod is running, execute the schema migration:
 
 ```bash
 # Get the app pod name
@@ -107,6 +107,81 @@ kubectl exec -n mynotes $POD -- node -e "
   execSync('pnpm db:push', { stdio: 'inherit' });
 "
 ```
+
+**SQLite:** No migration step required. The schema is created automatically on first startup.
+
+---
+
+## SQLite Alternative (Lighter Weight)
+
+For a lighter deployment that skips the MySQL StatefulSet entirely, you can configure the app to use SQLite. This is especially useful on the Pi 3B where MySQL alone consumes ~300 MB of RAM.
+
+### Changes required
+
+1. **Skip `02-mysql.yaml`** — do not apply it.
+
+2. **Update `01-secrets.yaml`** — remove the `DATABASE_URL` key and add:
+
+```bash
+echo -n "sqlite" | base64   # DATABASE_DRIVER value
+```
+
+Add to the Secret:
+```yaml
+DATABASE_DRIVER: c3FsaXRl   # base64 of "sqlite"
+```
+
+3. **Update `03-app.yaml`** — replace the `DATABASE_URL` env reference with:
+
+```yaml
+- name: DATABASE_DRIVER
+  valueFrom:
+    secretKeyRef:
+      name: mynotes-secrets
+      key: DATABASE_DRIVER
+- name: SQLITE_PATH
+  value: /app/data/mynotes.db
+```
+
+And add a `volumeMounts` and `volumes` section to persist the SQLite file:
+
+```yaml
+# In the container spec:
+volumeMounts:
+  - name: sqlite-data
+    mountPath: /app/data
+
+# In the pod spec:
+volumes:
+  - name: sqlite-data
+    persistentVolumeClaim:
+      claimName: mynotes-sqlite-pvc
+```
+
+Create the PVC:
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mynotes-sqlite-pvc
+  namespace: mynotes
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path   # k3s default
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+### SQLite resource usage on Pi 3B
+
+| Component | Memory Request | Memory Limit |
+|---|---|---|
+| mynotes-app | 128 Mi | 384 Mi |
+| k3s system | ~200 Mi | — |
+| **Total** | **~328 Mi** | **~584 Mi** |
+
+SQLite saves approximately **300 MB RAM** compared to the MySQL deployment, leaving comfortable headroom on the Pi 3B.
 
 ---
 
