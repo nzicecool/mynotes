@@ -144,3 +144,6 @@
 ## Documentation Updates
 - [x] Add SQLite instructions to Pi 3B Standalone Docker section in README.md (Option 2a/2b)
 - [x] Expand Local Setup section with SQLite env config, data dir note, and production tip
+
+## Bug Fixes
+- [x] Fix SameSite=None cookie issue on HTTP (Raspberry Pi / local deployment) — use SameSite=Lax without Secure on HTTP
