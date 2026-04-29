@@ -90,6 +90,39 @@ export const appRouter = router({
         const { createTag } = await import("./db");
         return createTag({ ...input, userId: ctx.user.id });
       }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { deleteTag } = await import("./db");
+        await deleteTag(input.id, ctx.user.id);
+        return { success: true };
+      }),
+    addToNote: protectedProcedure
+      .input(z.object({ noteId: z.number(), tagId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { addTagToNote } = await import("./db");
+        await addTagToNote(input.noteId, input.tagId);
+        return { success: true };
+      }),
+    removeFromNote: protectedProcedure
+      .input(z.object({ noteId: z.number(), tagId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { removeTagFromNote } = await import("./db");
+        await removeTagFromNote(input.noteId, input.tagId);
+        return { success: true };
+      }),
+    getForNote: protectedProcedure
+      .input(z.object({ noteId: z.number() }))
+      .query(async ({ input }) => {
+        const { getTagsForNote } = await import("./db");
+        return getTagsForNote(input.noteId);
+      }),
+    getNoteIdsByTag: protectedProcedure
+      .input(z.object({ tagId: z.number() }))
+      .query(async ({ input }) => {
+        const { getNoteIdsByTagId } = await import("./db");
+        return getNoteIdsByTagId(input.tagId);
+      }),
   }),
 
   folders: router({

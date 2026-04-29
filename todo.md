@@ -148,3 +148,21 @@
 ## Bug Fixes
 - [x] Fix SameSite=None cookie issue on HTTP (Raspberry Pi / local deployment) — use SameSite=Lax without Secure on HTTP
 - [x] Fix crypto.subtle unavailable on plain HTTP — install @noble/ciphers + @noble/hashes polyfill (noble fallback auto-activates on HTTP)
+
+## GitHub Actions CI
+- [x] Create .github/workflows/test.yml to run pnpm test on every push/PR
+- [x] Cache pnpm store for faster CI runs
+- [x] Use SQLite driver in CI (no external DB required)
+
+## Tag Filtering & Management UI
+- [x] Add note-tag association helpers to db.ts (addTagToNote, removeTagFromNote, getTagsForNote, getNoteIdsByTagId, deleteTag)
+- [x] Add tRPC procedures: tags.addToNote, tags.removeFromNote, tags.getForNote, tags.getNoteIdsByTag, tags.delete
+- [x] Tag filter panel in sidebar — click a tag to filter notes, click again or "Clear" to reset
+- [x] Tag picker popover in editor toolbar — assign/remove tags from the open note
+- [x] Tag management dialog — create tags with colour picker, delete tags
+- [x] Tags displayed as coloured pills on the open note
+
+## Auto-Save
+- [x] Auto-save existing notes 30 seconds after last edit (debounced)
+- [x] Auto-save indicator in editor toolbar (spinner while saving, green check when saved)
+- [x] Auto-save timer cleared on note switch, cancel, and logout

@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
   hasEncryptionKey,
@@ -20,6 +20,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 import {
   Plus,
@@ -31,7 +36,10 @@ import {
   Save,
   X,
   StickyNote,
-  ChevronRight,
+  Tag,
+  TagIcon,
+  Check,
+  Loader2,
 } from "lucide-react";
 import {
   NoteTypeSelector,
@@ -45,6 +53,32 @@ import { ChecklistEditor } from "@/components/editors/ChecklistEditor";
 import { CodeEditor } from "@/components/editors/CodeEditor";
 import { SpreadsheetEditor } from "@/components/editors/SpreadsheetEditor";
 
+// ─── Tag colours ─────────────────────────────────────────────────────────────
+
+const TAG_COLORS = [
+  "#6366f1", "#8b5cf6", "#ec4899", "#f43f5e", "#f97316",
+  "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#64748b",
+];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type NoteItem = {
+  id: number;
+  title: string | null;
+  encryptedContent: string;
+  noteType: string;
+  isPinned: number;
+  isArchived: number;
+  isTrashed: number;
+  createdAt: Date;
+  updatedAt: Date;
+  userId: number;
+};
+
+type TagItem = { id: number; name: string; color: string | null };
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -56,17 +90,33 @@ export default function Dashboard() {
   const [noteType, setNoteType] = useState<NoteType>("plain");
   const [isEditing, setIsEditing] = useState(false);
 
+  // Tag management state
+  const [activeTagId, setActiveTagId] = useState<number | null>(null);
+  const [showTagDialog, setShowTagDialog] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
+  const [noteTagIds, setNoteTagIds] = useState<number[]>([]);
+
   // UI state
   const [searchQuery, setSearchQuery] = useState("");
   const [showTypeDialog, setShowTypeDialog] = useState(false);
   const [pendingType, setPendingType] = useState<NoteType>("plain");
 
+  // Auto-save
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const lastSavedContentRef = useRef<string>("");
+
   // Data
-  type NoteItem = { id: number; title: string | null; encryptedContent: string; noteType: string; isPinned: number; isArchived: number; isTrashed: number; createdAt: Date; updatedAt: Date; userId: number };
   const { data: notes = [] as NoteItem[], refetch: refetchNotes } = trpc.notes.list.useQuery();
+  const { data: allTags = [] as TagItem[], refetch: refetchTags } = trpc.tags.list.useQuery();
   const createNoteMutation = trpc.notes.create.useMutation();
   const updateNoteMutation = trpc.notes.update.useMutation();
   const deleteNoteMutation = trpc.notes.delete.useMutation();
+  const createTagMutation = trpc.tags.create.useMutation();
+  const deleteTagMutation = trpc.tags.delete.useMutation();
+  const addTagToNoteMutation = trpc.tags.addToNote.useMutation();
+  const removeTagFromNoteMutation = trpc.tags.removeFromNote.useMutation();
 
   // Redirect if no encryption key
   useEffect(() => {
@@ -74,6 +124,51 @@ export default function Dashboard() {
       setLocation("/setup");
     }
   }, [setLocation]);
+
+  // ─── Auto-save logic ─────────────────────────────────────────────────────────
+
+  const triggerAutoSave = (content: string, title: string) => {
+    if (!selectedNoteId) return; // Only auto-save existing notes
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      if (content === lastSavedContentRef.current) return; // No change
+      const key = getEncryptionKey();
+      if (!key) return;
+      try {
+        setAutoSaveStatus("saving");
+        const encryptedContent = await encrypt(content, key);
+        await updateNoteMutation.mutateAsync({
+          id: selectedNoteId,
+          title: title || "Untitled",
+          encryptedContent,
+        });
+        lastSavedContentRef.current = content;
+        setAutoSaveStatus("saved");
+        refetchNotes();
+        setTimeout(() => setAutoSaveStatus("idle"), 2000);
+      } catch {
+        setAutoSaveStatus("idle");
+      }
+    }, 30_000); // 30 seconds
+  };
+
+  const handleContentChange = (value: string) => {
+    setNoteContent(value);
+    triggerAutoSave(value, noteTitle);
+  };
+
+  const handleTitleChange = (value: string) => {
+    setNoteTitle(value);
+    triggerAutoSave(noteContent, value);
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, []);
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -92,6 +187,7 @@ export default function Dashboard() {
     setSelectedNoteId(null);
     setNoteTitle("");
     setNoteContent("");
+    setNoteTagIds([]);
     setPendingType("plain");
     setShowTypeDialog(true);
   };
@@ -121,6 +217,7 @@ export default function Dashboard() {
       setNoteTitle("");
       setNoteContent("");
       setIsEditing(false);
+      lastSavedContentRef.current = "";
       refetchNotes();
     } catch (error) {
       console.error("Create note error:", error);
@@ -140,6 +237,7 @@ export default function Dashboard() {
         title: noteTitle || "Untitled",
         encryptedContent,
       });
+      lastSavedContentRef.current = noteContent;
       toast.success("Note saved");
       refetchNotes();
     } catch (error) {
@@ -149,6 +247,7 @@ export default function Dashboard() {
   };
 
   const handleSelectNote = async (noteId: number) => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     const note = notes.find((n: NoteItem) => n.id === noteId);
     if (!note) return;
 
@@ -166,6 +265,12 @@ export default function Dashboard() {
       setNoteContent(decryptedContent);
       setNoteType(note.noteType as NoteType);
       setIsEditing(false);
+      lastSavedContentRef.current = decryptedContent;
+      setAutoSaveStatus("idle");
+
+      // Load tags for this note
+      const tagData = await trpc.useUtils().tags.getForNote.fetch({ noteId });
+      setNoteTagIds(tagData.map((t: TagItem) => t.id));
     } catch (error) {
       console.error("Decrypt error:", error);
       toast.error("Failed to decrypt note");
@@ -182,6 +287,7 @@ export default function Dashboard() {
         setSelectedNoteId(null);
         setNoteTitle("");
         setNoteContent("");
+        setNoteTagIds([]);
         setIsEditing(false);
       }
       refetchNotes();
@@ -192,23 +298,86 @@ export default function Dashboard() {
   };
 
   const handleLogout = async () => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     clearEncryptionKey();
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     window.location.href = "/login";
   };
 
   const handleCancel = () => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     setIsEditing(false);
     setSelectedNoteId(null);
     setNoteTitle("");
     setNoteContent("");
+    setNoteTagIds([]);
+    setAutoSaveStatus("idle");
+  };
+
+  // ─── Tag handlers ─────────────────────────────────────────────────────────
+
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return;
+    try {
+      await createTagMutation.mutateAsync({ name: newTagName.trim(), color: newTagColor });
+      setNewTagName("");
+      setNewTagColor(TAG_COLORS[0]);
+      refetchTags();
+      toast.success("Tag created");
+    } catch {
+      toast.error("Failed to create tag");
+    }
+  };
+
+  const handleDeleteTag = async (tagId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Delete this tag? It will be removed from all notes.")) return;
+    try {
+      await deleteTagMutation.mutateAsync({ id: tagId });
+      if (activeTagId === tagId) setActiveTagId(null);
+      refetchTags();
+      toast.success("Tag deleted");
+    } catch {
+      toast.error("Failed to delete tag");
+    }
+  };
+
+  const handleToggleTagOnNote = async (tagId: number) => {
+    if (!selectedNoteId) return;
+    const hasTag = noteTagIds.includes(tagId);
+    try {
+      if (hasTag) {
+        await removeTagFromNoteMutation.mutateAsync({ noteId: selectedNoteId, tagId });
+        setNoteTagIds((prev) => prev.filter((id) => id !== tagId));
+      } else {
+        await addTagToNoteMutation.mutateAsync({ noteId: selectedNoteId, tagId });
+        setNoteTagIds((prev) => [...prev, tagId]);
+      }
+    } catch {
+      toast.error("Failed to update tag");
+    }
   };
 
   // ─── Derived ─────────────────────────────────────────────────────────────────
 
-  const filteredNotes = notes.filter((note: NoteItem) =>
-    (note.title?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+  const filteredNotes = notes.filter((note: NoteItem) => {
+    const matchesSearch = (note.title?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
+
+  // When a tag filter is active, we need note IDs that have that tag.
+  // We use a client-side filter based on noteTagIds loaded per note — but for
+  // the sidebar list we need a different approach: fetch all note IDs for the tag.
+  // We'll use a separate query for this.
+  const tagFilterQuery = trpc.tags.getNoteIdsByTag.useQuery(
+    { tagId: activeTagId! },
+    { enabled: activeTagId !== null }
   );
+  const tagFilteredNoteIds = activeTagId !== null ? (tagFilterQuery.data ?? []) : null;
+
+  const visibleNotes = tagFilteredNoteIds !== null
+    ? filteredNotes.filter((n: NoteItem) => tagFilteredNoteIds.includes(n.id))
+    : filteredNotes;
 
   const isActive = selectedNoteId !== null || isEditing;
   const isSaving = createNoteMutation.isPending || updateNoteMutation.isPending;
@@ -253,16 +422,81 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* ── Tag filter panel ── */}
+          {allTags.length > 0 && (
+            <div className="px-3 py-2 border-b">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tags</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 w-5 p-0"
+                  onClick={() => setShowTagDialog(true)}
+                  title="Manage tags"
+                >
+                  <Plus className="w-3 h-3" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {activeTagId !== null && (
+                  <button
+                    onClick={() => setActiveTagId(null)}
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-300 hover:bg-indigo-200 transition-colors"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                    Clear
+                  </button>
+                )}
+                {allTags.map((tag: TagItem) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => setActiveTagId(activeTagId === tag.id ? null : tag.id)}
+                    className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors ${
+                      activeTagId === tag.id
+                        ? "text-white border-transparent"
+                        : "bg-transparent border-current hover:opacity-80"
+                    }`}
+                    style={
+                      activeTagId === tag.id
+                        ? { backgroundColor: tag.color ?? "#6366f1", borderColor: tag.color ?? "#6366f1" }
+                        : { color: tag.color ?? "#6366f1" }
+                    }
+                  >
+                    <TagIcon className="w-2.5 h-2.5" />
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Add first tag CTA (when no tags exist) ── */}
+          {allTags.length === 0 && (
+            <div className="px-3 py-2 border-b">
+              <button
+                onClick={() => setShowTagDialog(true)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Tag className="w-3 h-3" />
+                Add tags to organise notes
+              </button>
+            </div>
+          )}
+
           <ScrollArea className="flex-1">
             <div className="p-2 space-y-1">
-              {filteredNotes.length === 0 ? (
+              {visibleNotes.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground">
                   <FileText className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">No notes yet</p>
-                  <p className="text-xs mt-1">Click "New Note" to get started</p>
+                  <p className="text-sm">
+                    {activeTagId !== null ? "No notes with this tag" : "No notes yet"}
+                  </p>
+                  {activeTagId === null && (
+                    <p className="text-xs mt-1">Click "New Note" to get started</p>
+                  )}
                 </div>
               ) : (
-                filteredNotes.map((note: NoteItem) => {
+                visibleNotes.map((note: NoteItem) => {
                   const typeMeta = NOTE_TYPES.find((t) => t.type === note.noteType);
                   const Icon = typeMeta?.icon ?? FileText;
                   return (
@@ -274,7 +508,7 @@ export default function Dashboard() {
                       onKeyDown={(e) => e.key === "Enter" && handleSelectNote(note.id)}
                       className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors group flex items-start gap-2.5 cursor-pointer ${
                         selectedNoteId === note.id
-                          ? "bg-indigo-50 border border-indigo-200"
+                          ? "bg-indigo-50 border border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-800"
                           : "hover:bg-accent border border-transparent"
                       }`}
                     >
@@ -315,10 +549,70 @@ export default function Dashboard() {
                 <Input
                   placeholder="Note title…"
                   value={noteTitle}
-                  onChange={(e) => setNoteTitle(e.target.value)}
+                  onChange={(e) => handleTitleChange(e.target.value)}
                   className="flex-1 text-base font-medium border-none shadow-none focus-visible:ring-0 px-0 h-8"
                 />
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Auto-save indicator */}
+                  {selectedNoteId && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      {autoSaveStatus === "saving" && (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> Saving…</>
+                      )}
+                      {autoSaveStatus === "saved" && (
+                        <><Check className="w-3 h-3 text-green-500" /> Saved</>
+                      )}
+                    </span>
+                  )}
+
+                  {/* Tag picker (only for existing notes) */}
+                  {selectedNoteId && allTags.length > 0 && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                          <Tag className="w-3 h-3" />
+                          Tags
+                          {noteTagIds.length > 0 && (
+                            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                              {noteTagIds.length}
+                            </Badge>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-52 p-2" align="end">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">Assign tags</p>
+                        <div className="space-y-0.5">
+                          {allTags.map((tag: TagItem) => {
+                            const active = noteTagIds.includes(tag.id);
+                            return (
+                              <button
+                                key={tag.id}
+                                onClick={() => handleToggleTagOnNote(tag.id)}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent text-sm transition-colors"
+                              >
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: tag.color ?? "#6366f1" }}
+                                />
+                                <span className="flex-1 text-left truncate">{tag.name}</span>
+                                {active && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="border-t mt-2 pt-2">
+                          <button
+                            onClick={() => setShowTagDialog(true)}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent text-xs text-muted-foreground transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Manage tags
+                          </button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+
                   <NoteTypeBadge type={noteType} />
                   <Button
                     size="sm"
@@ -335,12 +629,30 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* Note tags display */}
+              {selectedNoteId && noteTagIds.length > 0 && (
+                <div className="px-4 py-1.5 border-b flex items-center gap-1.5 flex-wrap bg-card/50">
+                  {allTags
+                    .filter((t: TagItem) => noteTagIds.includes(t.id))
+                    .map((tag: TagItem) => (
+                      <span
+                        key={tag.id}
+                        className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full text-white"
+                        style={{ backgroundColor: tag.color ?? "#6366f1" }}
+                      >
+                        <TagIcon className="w-2.5 h-2.5" />
+                        {tag.name}
+                      </span>
+                    ))}
+                </div>
+              )}
+
               {/* Editor body */}
               <div className="flex-1 overflow-hidden">
                 <NoteEditor
                   type={noteType}
                   value={noteContent}
-                  onChange={setNoteContent}
+                  onChange={handleContentChange}
                 />
               </div>
             </>
@@ -379,6 +691,76 @@ export default function Dashboard() {
           <p className="text-xs text-muted-foreground text-center pb-2">
             The note type determines which editor is used. You can change it later.
           </p>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Tag Management Dialog ── */}
+      <Dialog open={showTagDialog} onOpenChange={setShowTagDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="w-4 h-4" />
+              Manage Tags
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Create new tag */}
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Tag name…"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateTag()}
+                className="flex-1 h-8 text-sm"
+              />
+              <Button size="sm" onClick={handleCreateTag} disabled={!newTagName.trim() || createTagMutation.isPending}>
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+
+            {/* Color picker */}
+            <div className="flex gap-1.5 flex-wrap">
+              {TAG_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => setNewTagColor(color)}
+                  className={`w-6 h-6 rounded-full transition-transform ${newTagColor === color ? "scale-125 ring-2 ring-offset-1 ring-current" : "hover:scale-110"}`}
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+
+            {/* Existing tags list */}
+            {allTags.length > 0 && (
+              <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                {allTags.map((tag: TagItem) => (
+                  <div key={tag.id} className="flex items-center gap-2 px-3 py-2">
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: tag.color ?? "#6366f1" }}
+                    />
+                    <span className="flex-1 text-sm truncate">{tag.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                      onClick={(e) => handleDeleteTag(tag.id, e)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {allTags.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No tags yet. Create one above.
+              </p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

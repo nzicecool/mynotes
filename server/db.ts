@@ -345,6 +345,55 @@ export async function deleteResetTokensByUserId(userId: number) {
   await (db as any).delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
 }
 
+// ─── Note-Tag association helpers ───────────────────────────────────────────
+
+export async function addTagToNote(noteId: number, tagId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { noteTags } = await getSchema();
+  // Avoid duplicates
+  const existing = await (db as any).select().from(noteTags)
+    .where(and(eq(noteTags.noteId, noteId), eq(noteTags.tagId, tagId))).limit(1);
+  if (existing.length === 0) {
+    await (db as any).insert(noteTags).values({ noteId, tagId });
+  }
+}
+
+export async function removeTagFromNote(noteId: number, tagId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { noteTags } = await getSchema();
+  await (db as any).delete(noteTags).where(and(eq(noteTags.noteId, noteId), eq(noteTags.tagId, tagId)));
+}
+
+export async function getTagsForNote(noteId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { noteTags, tags } = await getSchema();
+  return (db as any).select({ id: tags.id, name: tags.name, color: tags.color })
+    .from(noteTags)
+    .innerJoin(tags, eq(noteTags.tagId, tags.id))
+    .where(eq(noteTags.noteId, noteId));
+}
+
+export async function getNoteIdsByTagId(tagId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const { noteTags } = await getSchema();
+  const rows = await (db as any).select({ noteId: noteTags.noteId }).from(noteTags).where(eq(noteTags.tagId, tagId));
+  return rows.map((r: { noteId: number }) => r.noteId);
+}
+
+export async function deleteTag(tagId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { tags, noteTags } = await getSchema();
+  // Remove all note-tag associations first
+  await (db as any).delete(noteTags).where(eq(noteTags.tagId, tagId));
+  // Delete the tag itself (scoped to owner)
+  await (db as any).delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId)));
+}
+
 // ─── SQLite migration helper ──────────────────────────────────────────────────
 
 /**
