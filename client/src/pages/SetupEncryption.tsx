@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { deriveKey, generateSalt, setEncryptionKey } from "@/lib/encryption";
+import { deriveKey, generateSalt, setEncryptionKey, getCryptoBackend } from "@/lib/encryption";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Lock, Shield } from "lucide-react";
@@ -152,6 +152,9 @@ export default function SetupEncryption() {
           <div className="text-sm text-muted-foreground text-center space-y-1">
             <p>🔒 End-to-end encrypted</p>
             <p>Your password never leaves your device</p>
+            <p className="text-xs opacity-60">
+              Crypto: {getCryptoBackend() === "native" ? "Web Crypto API (native)" : "@noble/ciphers (software fallback)"}
+            </p>
           </div>
         </CardContent>
       </Card>

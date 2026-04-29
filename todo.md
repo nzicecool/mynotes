@@ -147,3 +147,4 @@
 
 ## Bug Fixes
 - [x] Fix SameSite=None cookie issue on HTTP (Raspberry Pi / local deployment) — use SameSite=Lax without Secure on HTTP
+- [x] Fix crypto.subtle unavailable on plain HTTP — install @noble/ciphers + @noble/hashes polyfill (noble fallback auto-activates on HTTP)
