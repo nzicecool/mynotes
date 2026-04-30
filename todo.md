@@ -166,3 +166,6 @@
 - [x] Auto-save existing notes 30 seconds after last edit (debounced)
 - [x] Auto-save indicator in editor toolbar (spinner while saving, green check when saved)
 - [x] Auto-save timer cleared on note switch, cancel, and logout
+
+## Bug Fixes
+- [ ] Fix Vite/Rollup build error on Raspberry Pi: @noble/ciphers/aes.js subpath unresolvable — strip .js extension from noble imports and add optimizeDeps/ssr.noExternal to vite.config.ts
