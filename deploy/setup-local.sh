@@ -5,9 +5,10 @@
 # What it does:
 #   1. Installs Node.js 20 LTS, pnpm, and Caddy (if not already present)
 #   2. Detects the Pi's LAN IP and sets the nip.io domain
-#   3. Creates /etc/mynotes/env with required secrets
-#   4. Builds the app (pnpm install + pnpm build)
-#   5. Installs and starts two systemd services:
+#   3. Configures the database (SQLite by default, MySQL optional)
+#   4. Creates /etc/mynotes/env with required secrets
+#   5. Builds the app (pnpm install + pnpm build)
+#   6. Installs and starts two systemd services:
 #        mynotes        — Node.js app on port 3000
 #        caddy-mynotes  — Caddy reverse proxy (port 80/443, Let's Encrypt)
 #
@@ -19,15 +20,35 @@
 # Usage:
 #   cd /home/pi/mynotes/deploy
 #   sudo bash setup-local.sh
+#
+# To use MySQL instead of SQLite:
+#   sudo bash setup-local.sh --db=mysql
 
 set -euo pipefail
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()    { echo -e "${GREEN}  ✓${NC} $*"; }
 warn()    { echo -e "${YELLOW}  ⚠${NC} $*"; }
 error()   { echo -e "${RED}  ✗${NC} $*"; exit 1; }
 heading() { echo -e "\n${GREEN}▶ $*${NC}"; }
+ask()     { echo -e "${CYAN}  ?${NC} $*"; }
+
+# ── Parse arguments ───────────────────────────────────────────────────────────
+DB_MODE="sqlite"   # default
+for arg in "$@"; do
+  case "$arg" in
+    --db=mysql)   DB_MODE="mysql" ;;
+    --db=sqlite)  DB_MODE="sqlite" ;;
+    --help|-h)
+      echo "Usage: sudo bash setup-local.sh [--db=sqlite|mysql]"
+      echo ""
+      echo "  --db=sqlite   Use SQLite (default, recommended for Raspberry Pi)"
+      echo "  --db=mysql    Use MySQL/MariaDB (advanced, requires external DB server)"
+      exit 0
+      ;;
+  esac
+done
 
 # ── Must run as root ──────────────────────────────────────────────────────────
 if [[ $EUID -ne 0 ]]; then
@@ -44,6 +65,11 @@ echo "╔═══════════════════════�
 echo "║   MyNotes — Native HTTPS Setup (no Docker)          ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
+echo "  Database mode : ${DB_MODE^^}"
+if [[ "$DB_MODE" == "sqlite" ]]; then
+  echo "  Database file : ${REPO_ROOT}/data/mynotes.db"
+fi
+echo ""
 
 # ── 0. Pull latest code ───────────────────────────────────────────────────────
 heading "Updating repository"
@@ -57,11 +83,17 @@ if git -C "$REPO_ROOT" rev-parse --git-dir &>/dev/null; then
   else
     info "Repo is up to date ($(git -C "$REPO_ROOT" rev-parse --short HEAD))"
   fi
+else
+  warn "Not a git repo — skipping update check"
 fi
 
 # ── 1. Install Node.js 20 LTS ─────────────────────────────────────────────────
 heading "Checking Node.js"
-if ! command -v node &>/dev/null || [[ "$(node -e 'process.stdout.write(process.version.split(".")[0].replace("v",""))')" -lt 20 ]]; then
+NODE_MAJOR=0
+if command -v node &>/dev/null; then
+  NODE_MAJOR=$(node -e 'process.stdout.write(process.version.split(".")[0].replace("v",""))')
+fi
+if [[ "$NODE_MAJOR" -lt 20 ]]; then
   info "Installing Node.js 20 LTS..."
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
@@ -107,7 +139,7 @@ if [[ -z "$PI_IP" ]]; then
 fi
 
 DOMAIN="mynotes.${PI_IP}.nip.io"
-info "Detected IP : $PI_IP"
+info "Detected IP  : $PI_IP"
 info "nip.io domain: $DOMAIN"
 info "App URL      : https://$DOMAIN"
 
@@ -117,7 +149,6 @@ mkdir -p /etc/mynotes
 chmod 750 /etc/mynotes
 
 ENV_FILE="/etc/mynotes/env"
-
 if [[ ! -f "$ENV_FILE" ]]; then
   touch "$ENV_FILE"
   chmod 640 "$ENV_FILE"
@@ -133,30 +164,50 @@ set_env() {
   fi
 }
 
+get_env() {
+  grep "^${1}=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo ""
+}
+
 # Always update domain
 set_env "MYNOTES_DOMAIN" "$DOMAIN"
 
-# Prompt for DATABASE_URL if not set
-DB_URL=$(grep "^DATABASE_URL=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
-if [[ -z "$DB_URL" ]]; then
-  echo ""
-  read -rp "  Enter DATABASE_URL (e.g. mysql://user:pass@host:3306/db): " DB_URL
-  set_env "DATABASE_URL" "$DB_URL"
+# ── Database configuration ────────────────────────────────────────────────────
+if [[ "$DB_MODE" == "sqlite" ]]; then
+  # SQLite: no connection string needed — just set the driver and file path
+  DATA_DIR="${REPO_ROOT}/data"
+  mkdir -p "$DATA_DIR"
+  chown "$APP_USER":"$APP_USER" "$DATA_DIR"
+  set_env "DATABASE_DRIVER" "sqlite"
+  set_env "DATABASE_URL"    "sqlite:${DATA_DIR}/mynotes.db"
+  info "Database: SQLite → ${DATA_DIR}/mynotes.db"
+else
+  # MySQL: prompt for connection string
+  set_env "DATABASE_DRIVER" "mysql"
+  DB_URL=$(get_env "DATABASE_URL")
+  if [[ -z "$DB_URL" || "$DB_URL" == sqlite:* ]]; then
+    echo ""
+    ask "Enter MySQL DATABASE_URL (e.g. mysql://user:pass@host:3306/mynotes):"
+    read -rp "  > " DB_URL
+    set_env "DATABASE_URL" "$DB_URL"
+  else
+    info "DATABASE_URL already set"
+  fi
 fi
 
-# Auto-generate JWT_SECRET if not set
-JWT_VAL=$(grep "^JWT_SECRET=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+# ── JWT secret ────────────────────────────────────────────────────────────────
+JWT_VAL=$(get_env "JWT_SECRET")
 if [[ -z "$JWT_VAL" ]]; then
   GENERATED=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
   set_env "JWT_SECRET" "$GENERATED"
   info "JWT_SECRET auto-generated"
 fi
 
-# Prompt for Manus OAuth vars if not set
+# ── Manus OAuth vars ──────────────────────────────────────────────────────────
 for KEY in VITE_APP_ID OAUTH_SERVER_URL VITE_OAUTH_PORTAL_URL; do
-  VAL=$(grep "^${KEY}=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+  VAL=$(get_env "$KEY")
   if [[ -z "$VAL" ]]; then
-    read -rp "  Enter ${KEY}: " VAL
+    ask "Enter ${KEY}:"
+    read -rp "  > " VAL
     set_env "$KEY" "$VAL"
   fi
 done
@@ -203,6 +254,12 @@ echo "║                                                                  ║"
 printf  "║  URL: https://%-51s║\n" "${DOMAIN}"
 echo "║                                                                  ║"
 echo "║  Caddy is obtaining a Let's Encrypt certificate (~30 seconds).  ║"
+echo "║                                                                  ║"
+if [[ "$DB_MODE" == "sqlite" ]]; then
+printf  "║  Database: SQLite → %-46s║\n" "${REPO_ROOT}/data/mynotes.db"
+else
+echo "║  Database: MySQL (see /etc/mynotes/env for connection string)    ║"
+fi
 echo "║                                                                  ║"
 echo "║  View app logs:   journalctl -u mynotes -f                      ║"
 echo "║  View Caddy logs: journalctl -u caddy-mynotes -f                ║"

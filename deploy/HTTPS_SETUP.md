@@ -58,6 +58,20 @@ can complete its HTTP-01 ACME challenge. Log in to your router and add:
 | 80 | `<Pi LAN IP>` | 80 | TCP |
 | 443 | `<Pi LAN IP>` | 443 | TCP |
 
+### Database options
+
+SQLite is the default and is strongly recommended for Raspberry Pi — it requires
+no external database server and stores everything in a single file at
+`data/mynotes.db` inside the repo directory. MySQL is available as an advanced
+option for users who already have a MySQL/MariaDB server.
+
+| | SQLite (default) | MySQL (advanced) |
+|---|---|---|
+| **External server required** | No | Yes |
+| **Setup command** | `sudo bash setup-local.sh` | `sudo bash setup-local.sh --db=mysql` |
+| **Data location** | `<repo>/data/mynotes.db` | Your MySQL server |
+| **Best for** | Raspberry Pi, single-user | Multi-user, existing MySQL infra |
+
 ### One-command setup
 
 ```bash
@@ -65,18 +79,23 @@ can complete its HTTP-01 ACME challenge. Log in to your router and add:
 git clone https://github.com/nzicecool/mynotes.git
 cd mynotes/deploy
 
-# Run the setup script as root
+# Run the setup script as root (SQLite is the default)
 sudo bash setup-local.sh
+
+# Advanced: use MySQL instead
+sudo bash setup-local.sh --db=mysql
 ```
 
 The script will automatically:
 1. Pull the latest code from GitHub
 2. Install Node.js 20 LTS, pnpm, and Caddy (if not already present)
 3. Detect your Pi's LAN IP and set `MYNOTES_DOMAIN=mynotes.<IP>.nip.io`
-4. Create `/etc/mynotes/env` with required secrets (prompts for missing values)
-5. Run `pnpm install && pnpm build`
-6. Install and start two systemd services: `mynotes` and `caddy-mynotes`
-7. Caddy obtains a Let's Encrypt certificate automatically (~30 seconds)
+4. Configure the database — SQLite creates `data/mynotes.db` automatically;
+   MySQL prompts for a connection string
+5. Create `/etc/mynotes/env` with all required secrets (prompts for missing values)
+6. Run `pnpm install && pnpm build`
+7. Install and start two systemd services: `mynotes` and `caddy-mynotes`
+8. Caddy obtains a Let's Encrypt certificate automatically (~30 seconds)
 
 Open `https://mynotes.<YOUR_PI_IP>.nip.io` in your browser.
 

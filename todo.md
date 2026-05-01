@@ -174,3 +174,4 @@
 - [x] Add .dockerignore to exclude node_modules, dist, .git etc. from Docker build context
 - [x] Update HTTPS_SETUP.md with accurate Pi installation instructions (all fixes applied)
 - [x] Add native (no-Docker) HTTPS setup: Caddy systemd + Node systemd + setup-local.sh + updated HTTPS_SETUP.md
+- [x] Update setup-local.sh: default to SQLite, MySQL optional for advanced users
