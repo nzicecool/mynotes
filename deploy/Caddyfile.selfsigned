@@ -1,0 +1,35 @@
+# Caddyfile.selfsigned — MyNotes HTTPS with a self-signed certificate
+#
+# Use this when you CANNOT forward ports 80/443 to the internet
+# (e.g. behind a strict NAT, corporate network, or ISP that blocks port 80).
+#
+# With a self-signed certificate, browsers will show a security warning
+# on first visit. You can click "Advanced → Proceed" to accept it, or
+# install the Caddy root CA on your devices to trust it permanently.
+#
+# Usage:
+#   export MYNOTES_DOMAIN=192.168.1.50   # or mynotes.192.168.1.50.nip.io
+#   caddy run --config /path/to/Caddyfile.selfsigned
+#
+#   Or use docker-compose.selfsigned.yml
+
+{env.MYNOTES_DOMAIN} {
+    # Use Caddy's internal CA (self-signed) instead of Let's Encrypt
+    tls internal
+
+    reverse_proxy localhost:3000
+
+    log {
+        output file /var/log/caddy/mynotes-access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}

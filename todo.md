@@ -169,4 +169,5 @@
 
 ## Bug Fixes
 - [x] Fix Vite/Rollup build error on Raspberry Pi: downgrade @noble/ciphers to 1.3.0 and @noble/hashes to 1.8.0 (Node 16+ compatible, dual ./aes + ./aes.js exports)
-- [ ] Remove @noble/ciphers and @noble/hashes entirely — rewrite encryption.ts using only Web Crypto API (zero external crypto dependencies)
+- [x] Remove @noble/ciphers and @noble/hashes entirely — rewrite encryption.ts using only Web Crypto API (zero external crypto dependencies)
+- [x] Add HTTPS support for Pi self-hosting: Caddyfile + docker-compose + setup script using nip.io + Let's Encrypt

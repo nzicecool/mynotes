@@ -1,0 +1,48 @@
+# Caddyfile — MyNotes HTTPS reverse proxy for Raspberry Pi
+#
+# How it works:
+#   nip.io is a free wildcard DNS service. Any domain of the form
+#   <anything>.<IP>.nip.io resolves to <IP>. For example:
+#     mynotes.192.168.1.50.nip.io  →  192.168.1.50
+#
+#   Caddy uses this public DNS name to obtain a real Let's Encrypt
+#   TLS certificate automatically, so your browser trusts it with no
+#   manual certificate installation.
+#
+# Requirements:
+#   - Port 80 and 443 must be reachable from the internet (for ACME HTTP-01
+#     challenge). If your router does NAT, forward both ports to the Pi.
+#   - Alternatively, use the ACME DNS-01 challenge (see HTTPS_SETUP.md).
+#
+# Usage:
+#   Set the MYNOTES_DOMAIN environment variable before starting Caddy:
+#     export MYNOTES_DOMAIN=mynotes.192.168.1.50.nip.io
+#     caddy run --config /path/to/Caddyfile
+#
+#   Or use the provided docker-compose.yml which sets it automatically.
+
+{env.MYNOTES_DOMAIN} {
+    # Reverse-proxy all traffic to the Node.js app on port 3000
+    reverse_proxy localhost:3000
+
+    # Enable access logging
+    log {
+        output file /var/log/caddy/mynotes-access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+# Redirect plain HTTP to HTTPS
+http://{env.MYNOTES_DOMAIN} {
+    redir https://{env.MYNOTES_DOMAIN}{uri} permanent
+}

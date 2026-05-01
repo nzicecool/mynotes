@@ -123,3 +123,6 @@ temp/
 # Additional env variants
 .env.*
 !.env.example
+
+# Deploy directory secrets
+deploy/.env
