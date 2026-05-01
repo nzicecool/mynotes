@@ -1,124 +1,110 @@
 /**
- * Tests for the @noble/ciphers + @noble/hashes encryption fallback path.
+ * Tests for the Web Crypto API encryption module.
  *
- * These tests run in Node.js (which has crypto.subtle available), so we
- * test the noble path by calling the noble primitives directly — exactly
- * as encryption.ts does when crypto.subtle is absent.
+ * These tests run in Node.js (which has crypto.subtle available via
+ * globalThis.crypto) and exercise the encrypt/decrypt/deriveKey helpers
+ * from client/src/lib/encryption.ts directly.
  */
 
 import { describe, expect, it } from "vitest";
-import { gcm } from "@noble/ciphers/aes.js";
-import { pbkdf2 } from "@noble/hashes/pbkdf2.js";
-import { sha256 } from "@noble/hashes/sha2.js";
-import { randomBytes } from "@noble/hashes/utils.js";
+import {
+  deriveKey,
+  encrypt,
+  decrypt,
+  generateSalt,
+  isValidBase64,
+  getCryptoBackend,
+} from "../client/src/lib/encryption";
 
-const PBKDF2_ITERATIONS = 100_000;
-const KEY_LENGTH = 32;
-const IV_LENGTH = 12;
-
-function arrayBufferToBase64(buffer: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < buffer.byteLength; i++) {
-    binary += String.fromCharCode(buffer[i]);
-  }
-  return btoa(binary);
-}
-
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function deriveNobleKey(password: string, saltBase64: string): Uint8Array {
-  const encoder = new TextEncoder();
-  const passwordBytes = encoder.encode(password);
-  const saltBytes = base64ToUint8Array(saltBase64);
-  return pbkdf2(sha256, passwordBytes, saltBytes, {
-    c: PBKDF2_ITERATIONS,
-    dkLen: KEY_LENGTH,
-  });
-}
-
-function nobleEncrypt(data: string, key: Uint8Array): string {
-  const encoder = new TextEncoder();
-  const dataBytes = encoder.encode(data);
-  const iv = randomBytes(IV_LENGTH);
-  const cipher = gcm(key, iv);
-  const ciphertext = cipher.encrypt(dataBytes);
-  const combined = new Uint8Array(iv.length + ciphertext.length);
-  combined.set(iv, 0);
-  combined.set(ciphertext, iv.length);
-  return arrayBufferToBase64(combined);
-}
-
-function nobleDecrypt(encryptedData: string, key: Uint8Array): string {
-  const combined = base64ToUint8Array(encryptedData);
-  const iv = combined.slice(0, IV_LENGTH);
-  const ciphertext = combined.slice(IV_LENGTH);
-  const cipher = gcm(key, iv);
-  const plaintext = cipher.decrypt(ciphertext);
-  return new TextDecoder().decode(plaintext);
-}
-
-describe("Noble crypto fallback (AES-256-GCM + PBKDF2)", () => {
-  it("derives a 32-byte key from password and salt", () => {
-    const salt = arrayBufferToBase64(randomBytes(16));
-    const key = deriveNobleKey("my-secure-password", salt);
-    expect(key).toBeInstanceOf(Uint8Array);
-    expect(key.byteLength).toBe(32);
+describe("Web Crypto encryption (AES-256-GCM + PBKDF2)", () => {
+  it("getCryptoBackend returns native", () => {
+    expect(getCryptoBackend()).toBe("native");
   });
 
-  it("encrypts and decrypts a short string correctly", () => {
-    const salt = arrayBufferToBase64(randomBytes(16));
-    const key = deriveNobleKey("test-password", salt);
+  it("generateSalt produces a valid Base64 string of 16 bytes", () => {
+    const salt = generateSalt();
+    expect(isValidBase64(salt)).toBe(true);
+    // 16 bytes → 24 Base64 chars (with padding)
+    expect(atob(salt).length).toBe(16);
+  });
+
+  it("derives a key from password and salt", async () => {
+    const salt = generateSalt();
+    const key = await deriveKey("my-secure-password", salt);
+    expect(key.type).toBe("native");
+    expect(key.key).toBeInstanceOf(CryptoKey);
+  });
+
+  it("encrypts and decrypts a short string correctly", async () => {
+    const salt = generateSalt();
+    const key = await deriveKey("test-password", salt);
     const plaintext = "Hello, MyNotes!";
-    const encrypted = nobleEncrypt(plaintext, key);
-    const decrypted = nobleDecrypt(encrypted, key);
+    const encrypted = await encrypt(plaintext, key);
+    expect(isValidBase64(encrypted)).toBe(true);
+    const decrypted = await decrypt(encrypted, key);
     expect(decrypted).toBe(plaintext);
   });
 
-  it("encrypts and decrypts a long note correctly", () => {
-    const salt = arrayBufferToBase64(randomBytes(16));
-    const key = deriveNobleKey("long-note-password", salt);
+  it("encrypts and decrypts a long note correctly", async () => {
+    const salt = generateSalt();
+    const key = await deriveKey("long-note-password", salt);
     const longText = "Lorem ipsum ".repeat(500);
-    const encrypted = nobleEncrypt(longText, key);
-    const decrypted = nobleDecrypt(encrypted, key);
+    const encrypted = await encrypt(longText, key);
+    const decrypted = await decrypt(encrypted, key);
     expect(decrypted).toBe(longText);
   });
 
-  it("produces different ciphertext for the same plaintext (random IV)", () => {
-    const salt = arrayBufferToBase64(randomBytes(16));
-    const key = deriveNobleKey("same-password", salt);
+  it("produces different ciphertext for the same plaintext (random IV)", async () => {
+    const salt = generateSalt();
+    const key = await deriveKey("same-password", salt);
     const plaintext = "Same content";
-    const enc1 = nobleEncrypt(plaintext, key);
-    const enc2 = nobleEncrypt(plaintext, key);
+    const enc1 = await encrypt(plaintext, key);
+    const enc2 = await encrypt(plaintext, key);
     expect(enc1).not.toBe(enc2); // Different IVs → different ciphertext
   });
 
-  it("fails to decrypt with a wrong key", () => {
-    const salt = arrayBufferToBase64(randomBytes(16));
-    const correctKey = deriveNobleKey("correct-password", salt);
-    const wrongKey = deriveNobleKey("wrong-password", salt);
-    const encrypted = nobleEncrypt("Secret note", correctKey);
-    expect(() => nobleDecrypt(encrypted, wrongKey)).toThrow();
+  it("fails to decrypt with a wrong key (returns null)", async () => {
+    const salt = generateSalt();
+    const correctKey = await deriveKey("correct-password", salt);
+    const wrongKey = await deriveKey("wrong-password", salt);
+    const encrypted = await encrypt("Secret note", correctKey);
+    const result = await decrypt(encrypted, wrongKey);
+    expect(result).toBeNull();
   });
 
-  it("different passwords produce different keys from the same salt", () => {
-    const salt = arrayBufferToBase64(randomBytes(16));
-    const key1 = deriveNobleKey("password-one", salt);
-    const key2 = deriveNobleKey("password-two", salt);
-    expect(arrayBufferToBase64(key1)).not.toBe(arrayBufferToBase64(key2));
+  it("different passwords produce different keys", async () => {
+    const salt = generateSalt();
+    const key1 = await deriveKey("password-one", salt);
+    const key2 = await deriveKey("password-two", salt);
+    // Encrypt same plaintext with each key — ciphertext must differ
+    const enc1 = await encrypt("test", key1);
+    const enc2 = await encrypt("test", key2);
+    // They will differ because the keys are different (even with same IV odds)
+    // More reliably: wrong key cannot decrypt
+    expect(await decrypt(enc1, key2)).toBeNull();
   });
 
-  it("same password + different salts produce different keys", () => {
-    const salt1 = arrayBufferToBase64(randomBytes(16));
-    const salt2 = arrayBufferToBase64(randomBytes(16));
-    const key1 = deriveNobleKey("same-password", salt1);
-    const key2 = deriveNobleKey("same-password", salt2);
-    expect(arrayBufferToBase64(key1)).not.toBe(arrayBufferToBase64(key2));
+  it("same password + different salts produce different keys", async () => {
+    const salt1 = generateSalt();
+    const salt2 = generateSalt();
+    const key1 = await deriveKey("same-password", salt1);
+    const key2 = await deriveKey("same-password", salt2);
+    // Encrypt with key1, try to decrypt with key2 — must fail
+    const encrypted = await encrypt("test content", key1);
+    expect(await decrypt(encrypted, key2)).toBeNull();
+  });
+
+  it("returns original string for non-Base64 input (plain text / legacy note)", async () => {
+    const salt = generateSalt();
+    const key = await deriveKey("password", salt);
+    const plainText = "This is a plain text note, not encrypted!";
+    const result = await decrypt(plainText, key);
+    expect(result).toBe(plainText);
+  });
+
+  it("isValidBase64 correctly identifies Base64 strings", () => {
+    expect(isValidBase64(btoa("hello"))).toBe(true);
+    expect(isValidBase64("not base64!!!")).toBe(false);
+    expect(isValidBase64("")).toBe(false);
   });
 });

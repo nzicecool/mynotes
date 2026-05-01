@@ -168,4 +168,5 @@
 - [x] Auto-save timer cleared on note switch, cancel, and logout
 
 ## Bug Fixes
-- [ ] Fix Vite/Rollup build error on Raspberry Pi: @noble/ciphers/aes.js subpath unresolvable — strip .js extension from noble imports and add optimizeDeps/ssr.noExternal to vite.config.ts
+- [x] Fix Vite/Rollup build error on Raspberry Pi: downgrade @noble/ciphers to 1.3.0 and @noble/hashes to 1.8.0 (Node 16+ compatible, dual ./aes + ./aes.js exports)
+- [ ] Remove @noble/ciphers and @noble/hashes entirely — rewrite encryption.ts using only Web Crypto API (zero external crypto dependencies)
