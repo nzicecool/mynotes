@@ -178,3 +178,4 @@
 - [x] Add local username/password auth for Pi install (no Manus OAuth dependency)
 - [x] Add AgentMail configuration to setup-local.sh and env template
 - [x] Fix setup-local.sh HTTPS: use self-signed cert (no Let's Encrypt, no port forwarding)
+- [x] Fix SQLite path: db.ts now parses DATABASE_URL (sqlite: prefix) as fallback when SQLITE_PATH is not set

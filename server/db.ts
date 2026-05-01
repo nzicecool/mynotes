@@ -8,7 +8,10 @@
  * SQLite is recommended for Raspberry Pi / single-user / air-gapped deployments.
  * MySQL is recommended for multi-user / server / team deployments.
  *
- * SQLite database file location is controlled by SQLITE_PATH (default: ./data/mynotes.db)
+ * SQLite database file location is resolved in this order:
+ *   1. SQLITE_PATH env var (e.g. SQLITE_PATH=/mnt/usbdisk-1/mynotes/data/mynotes.db)
+ *   2. DATABASE_URL env var with sqlite: prefix (e.g. DATABASE_URL=sqlite:/mnt/usbdisk-1/mynotes/data/mynotes.db)
+ *   3. Default: ./data/mynotes.db (relative to the process working directory)
  */
 
 import { and, eq, gt, desc } from "drizzle-orm";
@@ -41,7 +44,16 @@ export async function getDb(): Promise<AnyDb | null> {
       const path = await import("path");
       const fs = await import("fs");
 
-      const dbPath = process.env.SQLITE_PATH ?? "./data/mynotes.db";
+      // Resolve SQLite file path: SQLITE_PATH > DATABASE_URL (sqlite: prefix) > default
+      let dbPath = process.env.SQLITE_PATH;
+      if (!dbPath && process.env.DATABASE_URL) {
+        // Support DATABASE_URL=sqlite:/path/to/db or sqlite:///path/to/db
+        const url = process.env.DATABASE_URL;
+        if (url.startsWith("sqlite:")) {
+          dbPath = url.replace(/^sqlite:\/\/\//, "/").replace(/^sqlite:\/\//, "/").replace(/^sqlite:/, "");
+        }
+      }
+      if (!dbPath) dbPath = "./data/mynotes.db";
       const dir = path.dirname(dbPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
