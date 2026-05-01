@@ -175,3 +175,6 @@
 - [x] Update HTTPS_SETUP.md with accurate Pi installation instructions (all fixes applied)
 - [x] Add native (no-Docker) HTTPS setup: Caddy systemd + Node systemd + setup-local.sh + updated HTTPS_SETUP.md
 - [x] Update setup-local.sh: default to SQLite, MySQL optional for advanced users
+- [x] Add local username/password auth for Pi install (no Manus OAuth dependency)
+- [x] Add AgentMail configuration to setup-local.sh and env template
+- [x] Fix setup-local.sh HTTPS: use self-signed cert (no Let's Encrypt, no port forwarding)

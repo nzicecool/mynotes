@@ -1,28 +1,31 @@
 #!/usr/bin/env bash
 # setup-local.sh — One-command HTTPS setup for MyNotes on Raspberry Pi
-#                  WITHOUT Docker or Docker Compose.
+#                  WITHOUT Docker, Docker Compose, or Manus OAuth.
+#
+# Authentication: local username/password (register at /register after setup)
+# HTTPS:          Caddy self-signed certificate — NO port forwarding needed
+# Database:       SQLite by default (no external DB server needed)
 #
 # What it does:
 #   1. Installs Node.js 20 LTS, pnpm, and Caddy (if not already present)
 #   2. Detects the Pi's LAN IP and sets the nip.io domain
 #   3. Configures the database (SQLite by default, MySQL optional)
-#   4. Creates /etc/mynotes/env with required secrets
-#   5. Builds the app (pnpm install + pnpm build)
-#   6. Installs and starts two systemd services:
+#   4. Configures AgentMail for password-reset emails (optional)
+#   5. Creates /etc/mynotes/env with required secrets
+#   6. Builds the app (pnpm install + pnpm build)
+#   7. Installs and starts two systemd services:
 #        mynotes        — Node.js app on port 3000
-#        caddy-mynotes  — Caddy reverse proxy (port 80/443, Let's Encrypt)
+#        caddy-mynotes  — Caddy reverse proxy (port 443, self-signed cert)
 #
 # Requirements:
 #   - Raspberry Pi OS (Debian/Ubuntu-based)
-#   - Ports 80 and 443 forwarded to this Pi on your router (for Let's Encrypt)
 #   - Run as root or with sudo: sudo bash setup-local.sh
+#   - NO port forwarding required (self-signed cert, no Let's Encrypt)
 #
 # Usage:
 #   cd /home/pi/mynotes/deploy
-#   sudo bash setup-local.sh
-#
-# To use MySQL instead of SQLite:
-#   sudo bash setup-local.sh --db=mysql
+#   sudo bash setup-local.sh              # SQLite (default)
+#   sudo bash setup-local.sh --db=mysql   # MySQL (advanced)
 
 set -euo pipefail
 
@@ -35,7 +38,7 @@ heading() { echo -e "\n${GREEN}▶ $*${NC}"; }
 ask()     { echo -e "${CYAN}  ?${NC} $*"; }
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
-DB_MODE="sqlite"   # default
+DB_MODE="sqlite"
 for arg in "$@"; do
   case "$arg" in
     --db=mysql)   DB_MODE="mysql" ;;
@@ -45,6 +48,9 @@ for arg in "$@"; do
       echo ""
       echo "  --db=sqlite   Use SQLite (default, recommended for Raspberry Pi)"
       echo "  --db=mysql    Use MySQL/MariaDB (advanced, requires external DB server)"
+      echo ""
+      echo "Authentication: local username/password — no Manus account needed"
+      echo "HTTPS:          Self-signed certificate via Caddy — no port forwarding needed"
       exit 0
       ;;
   esac
@@ -61,10 +67,12 @@ APP_USER="${SUDO_USER:-pi}"
 APP_HOME=$(eval echo "~$APP_USER")
 
 echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║   MyNotes — Native HTTPS Setup (no Docker)          ║"
-echo "╚══════════════════════════════════════════════════════╝"
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║   MyNotes — Native Setup (no Docker, no Manus OAuth)        ║"
+echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
+echo "  Auth mode     : Local username/password"
+echo "  HTTPS mode    : Self-signed certificate (no port forwarding)"
 echo "  Database mode : ${DB_MODE^^}"
 if [[ "$DB_MODE" == "sqlite" ]]; then
   echo "  Database file : ${REPO_ROOT}/data/mynotes.db"
@@ -74,7 +82,7 @@ echo ""
 # ── 0. Pull latest code ───────────────────────────────────────────────────────
 heading "Updating repository"
 if git -C "$REPO_ROOT" rev-parse --git-dir &>/dev/null; then
-  sudo -u "$APP_USER" git -C "$REPO_ROOT" fetch origin --quiet
+  sudo -u "$APP_USER" git -C "$REPO_ROOT" fetch origin --quiet 2>/dev/null || true
   LOCAL=$(git -C "$REPO_ROOT" rev-parse HEAD)
   REMOTE=$(git -C "$REPO_ROOT" rev-parse origin/main 2>/dev/null || echo "")
   if [[ -n "$REMOTE" && "$LOCAL" != "$REMOTE" ]]; then
@@ -142,6 +150,8 @@ DOMAIN="mynotes.${PI_IP}.nip.io"
 info "Detected IP  : $PI_IP"
 info "nip.io domain: $DOMAIN"
 info "App URL      : https://$DOMAIN"
+warn "Self-signed cert: browser will show a warning on first visit."
+warn "Click 'Advanced → Proceed' to accept, or install the Caddy root CA."
 
 # ── 5. Create /etc/mynotes/env ────────────────────────────────────────────────
 heading "Configuring secrets"
@@ -173,7 +183,6 @@ set_env "MYNOTES_DOMAIN" "$DOMAIN"
 
 # ── Database configuration ────────────────────────────────────────────────────
 if [[ "$DB_MODE" == "sqlite" ]]; then
-  # SQLite: no connection string needed — just set the driver and file path
   DATA_DIR="${REPO_ROOT}/data"
   mkdir -p "$DATA_DIR"
   chown "$APP_USER":"$APP_USER" "$DATA_DIR"
@@ -181,7 +190,6 @@ if [[ "$DB_MODE" == "sqlite" ]]; then
   set_env "DATABASE_URL"    "sqlite:${DATA_DIR}/mynotes.db"
   info "Database: SQLite → ${DATA_DIR}/mynotes.db"
 else
-  # MySQL: prompt for connection string
   set_env "DATABASE_DRIVER" "mysql"
   DB_URL=$(get_env "DATABASE_URL")
   if [[ -z "$DB_URL" || "$DB_URL" == sqlite:* ]]; then
@@ -194,23 +202,75 @@ else
   fi
 fi
 
-# ── JWT secret ────────────────────────────────────────────────────────────────
+# ── JWT secret (auto-generated if not set) ────────────────────────────────────
 JWT_VAL=$(get_env "JWT_SECRET")
 if [[ -z "$JWT_VAL" ]]; then
   GENERATED=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
   set_env "JWT_SECRET" "$GENERATED"
   info "JWT_SECRET auto-generated"
+else
+  info "JWT_SECRET already set"
 fi
 
-# ── Manus OAuth vars ──────────────────────────────────────────────────────────
-for KEY in VITE_APP_ID OAUTH_SERVER_URL VITE_OAUTH_PORTAL_URL; do
-  VAL=$(get_env "$KEY")
-  if [[ -z "$VAL" ]]; then
-    ask "Enter ${KEY}:"
-    read -rp "  > " VAL
-    set_env "$KEY" "$VAL"
+# ── Manus OAuth (OPTIONAL — only needed if you want Manus login) ──────────────
+# Local username/password auth works without these.
+# Leave blank to use only local auth.
+echo ""
+echo "  ┌─────────────────────────────────────────────────────────────┐"
+echo "  │  Manus OAuth (OPTIONAL)                                     │"
+echo "  │  Leave blank to use local username/password auth only.      │"
+echo "  └─────────────────────────────────────────────────────────────┘"
+VITE_APP_ID=$(get_env "VITE_APP_ID")
+if [[ -z "$VITE_APP_ID" ]]; then
+  ask "VITE_APP_ID (press Enter to skip Manus OAuth):"
+  read -rp "  > " VITE_APP_ID
+  if [[ -n "$VITE_APP_ID" ]]; then
+    set_env "VITE_APP_ID"          "$VITE_APP_ID"
+    set_env "OAUTH_SERVER_URL"     "https://api.manus.im"
+    set_env "VITE_OAUTH_PORTAL_URL" "https://manus.im"
+    info "Manus OAuth configured"
+  else
+    # Set empty placeholders so the app starts without errors
+    set_env "VITE_APP_ID"          ""
+    set_env "OAUTH_SERVER_URL"     ""
+    set_env "VITE_OAUTH_PORTAL_URL" ""
+    info "Manus OAuth skipped — using local auth only"
   fi
-done
+else
+  info "Manus OAuth already configured (VITE_APP_ID is set)"
+fi
+
+# ── AgentMail (OPTIONAL — for password-reset emails) ─────────────────────────
+echo ""
+echo "  ┌─────────────────────────────────────────────────────────────┐"
+echo "  │  AgentMail (OPTIONAL)                                       │"
+echo "  │  Used to send password-reset emails.                        │"
+echo "  │  Get a free API key at https://agentmail.to                 │"
+echo "  │  Leave blank to disable email — reset links will be logged  │"
+echo "  │  to the console instead (journalctl -u mynotes -f).         │"
+echo "  └─────────────────────────────────────────────────────────────┘"
+AGENTMAIL_KEY=$(get_env "AGENTMAIL_API_KEY")
+if [[ -z "$AGENTMAIL_KEY" ]]; then
+  ask "AGENTMAIL_API_KEY (press Enter to skip):"
+  read -rp "  > " AGENTMAIL_KEY
+  if [[ -n "$AGENTMAIL_KEY" ]]; then
+    set_env "AGENTMAIL_API_KEY" "$AGENTMAIL_KEY"
+    ask "AGENTMAIL_INBOX_ID (optional — leave blank to auto-create):"
+    read -rp "  > " AGENTMAIL_INBOX_ID
+    set_env "AGENTMAIL_INBOX_ID" "${AGENTMAIL_INBOX_ID:-}"
+    ask "AGENTMAIL_INBOX_USERNAME (optional, default: mynotes-noreply):"
+    read -rp "  > " AGENTMAIL_INBOX_USERNAME
+    set_env "AGENTMAIL_INBOX_USERNAME" "${AGENTMAIL_INBOX_USERNAME:-mynotes-noreply}"
+    info "AgentMail configured"
+  else
+    set_env "AGENTMAIL_API_KEY"        ""
+    set_env "AGENTMAIL_INBOX_ID"       ""
+    set_env "AGENTMAIL_INBOX_USERNAME" "mynotes-noreply"
+    info "AgentMail skipped — password-reset links will appear in server logs"
+  fi
+else
+  info "AgentMail already configured (AGENTMAIL_API_KEY is set)"
+fi
 
 info "/etc/mynotes/env configured"
 
@@ -221,17 +281,16 @@ sudo -u "$APP_USER" pnpm install --frozen-lockfile
 sudo -u "$APP_USER" pnpm build
 info "Build complete"
 
-# ── 7. Install Caddy config ───────────────────────────────────────────────────
+# ── 7. Install Caddy config (self-signed) ─────────────────────────────────────
 heading "Installing Caddy configuration"
 mkdir -p /var/log/caddy
 chown caddy:caddy /var/log/caddy 2>/dev/null || true
 cp "$SCRIPT_DIR/Caddyfile.local" /etc/caddy/Caddyfile.mynotes
-info "Caddyfile installed at /etc/caddy/Caddyfile.mynotes"
+info "Caddyfile installed at /etc/caddy/Caddyfile.mynotes (self-signed cert)"
 
 # ── 8. Install systemd services ───────────────────────────────────────────────
 heading "Installing systemd services"
 
-# Patch the service file with the actual user and repo path
 sed "s|User=pi|User=${APP_USER}|g; s|/home/pi/mynotes|${REPO_ROOT}|g" \
   "$SCRIPT_DIR/mynotes.service" > /etc/systemd/system/mynotes.service
 
@@ -253,7 +312,12 @@ echo "║  MyNotes is running!                                             ║"
 echo "║                                                                  ║"
 printf  "║  URL: https://%-51s║\n" "${DOMAIN}"
 echo "║                                                                  ║"
-echo "║  Caddy is obtaining a Let's Encrypt certificate (~30 seconds).  ║"
+echo "║  ⚠  First visit: browser will warn about the certificate.       ║"
+echo "║     Click 'Advanced → Proceed' to continue.                     ║"
+echo "║     See HTTPS_SETUP.md to install the CA and remove the warning.║"
+echo "║                                                                  ║"
+echo "║  Register your first account at:                                 ║"
+printf  "║    https://%-55s║\n" "${DOMAIN}/register"
 echo "║                                                                  ║"
 if [[ "$DB_MODE" == "sqlite" ]]; then
 printf  "║  Database: SQLite → %-46s║\n" "${REPO_ROOT}/data/mynotes.db"

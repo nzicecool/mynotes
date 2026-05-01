@@ -1,33 +1,52 @@
 # ── MyNotes deployment environment variables ──────────────────────────────────
 # Copy this file to .env in the deploy/ directory and fill in your values.
 # Never commit .env to version control.
+#
+# For native Pi install (setup-local.sh), these are written automatically
+# to /etc/mynotes/env — you do not need to edit this file manually.
 
 # ── HTTPS domain (nip.io) ─────────────────────────────────────────────────────
 # Replace 192.168.1.50 with your Raspberry Pi's actual LAN IP address.
-# The nip.io service will resolve this domain to that IP automatically.
-# Ports 80 and 443 must be forwarded to the Pi on your router for
-# Let's Encrypt to issue a certificate.
+# The nip.io service resolves this domain to that IP automatically.
+# setup-local.sh detects this automatically — no manual edit needed.
+# NOTE: setup-local.sh uses a self-signed cert — NO port forwarding required.
 MYNOTES_DOMAIN=mynotes.192.168.1.50.nip.io
 
 # ── Database ──────────────────────────────────────────────────────────────────
-# MySQL/TiDB connection string (same as used in Manus deployment).
-DATABASE_URL=mysql://user:password@host:3306/mynotes
+# SQLite (default — recommended for Raspberry Pi, no external server needed)
+DATABASE_DRIVER=sqlite
+DATABASE_URL=sqlite:/home/pi/mynotes/data/mynotes.db
+
+# MySQL (advanced — requires an external MySQL/MariaDB server)
+# DATABASE_DRIVER=mysql
+# DATABASE_URL=mysql://user:password@host:3306/mynotes
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 # Generate a strong random secret: openssl rand -hex 32
+# setup-local.sh auto-generates this if not set.
 JWT_SECRET=change-me-to-a-random-secret
 
-# ── Manus OAuth ───────────────────────────────────────────────────────────────
-# Copy these from your Manus project settings.
+# ── Manus OAuth (OPTIONAL) ────────────────────────────────────────────────────
+# Only needed if you want users to log in with their Manus account.
+# Leave blank to use local username/password auth only.
+# Register at /register after setup — no Manus account needed.
 VITE_APP_ID=
-OAUTH_SERVER_URL=https://api.manus.im
-VITE_OAUTH_PORTAL_URL=https://manus.im
+OAUTH_SERVER_URL=
+VITE_OAUTH_PORTAL_URL=
 
-# ── Owner info ────────────────────────────────────────────────────────────────
+# ── Owner info (OPTIONAL — only used with Manus OAuth) ───────────────────────
 OWNER_OPEN_ID=
 OWNER_NAME=
 
-# ── Manus built-in APIs (optional — only needed for AI features) ──────────────
+# ── AgentMail (OPTIONAL — for password-reset emails) ─────────────────────────
+# Get a free API key at https://agentmail.to
+# If not set, password-reset links are logged to the console instead
+# (journalctl -u mynotes -f or docker compose logs app).
+AGENTMAIL_API_KEY=
+AGENTMAIL_INBOX_ID=
+AGENTMAIL_INBOX_USERNAME=mynotes-noreply
+
+# ── Manus built-in APIs (OPTIONAL — only needed for AI features) ──────────────
 BUILT_IN_FORGE_API_URL=
 BUILT_IN_FORGE_API_KEY=
 VITE_FRONTEND_FORGE_API_KEY=
