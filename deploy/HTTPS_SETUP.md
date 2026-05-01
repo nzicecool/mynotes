@@ -33,13 +33,27 @@ for Let's Encrypt to issue a trusted TLS certificate.
 
 ## Prerequisites
 
-Install Docker and Docker Compose on the Pi:
+### 1. Install Docker and Docker Compose
 
 ```bash
 sudo apt update
 sudo apt install -y docker.io docker-compose-plugin
 sudo usermod -aG docker $USER   # allow running docker without sudo
 newgrp docker                   # apply group change in current shell
+```
+
+Verify the installation:
+
+```bash
+docker --version
+docker compose version
+```
+
+### 2. Clone the repository
+
+```bash
+git clone https://github.com/nzicecool/mynotes.git
+cd mynotes
 ```
 
 ---
@@ -61,29 +75,30 @@ Log in to your router and add two port-forward rules:
 ### One-command setup
 
 ```bash
-cd /path/to/mynotes/deploy
+cd mynotes/deploy
 chmod +x setup.sh
 ./setup.sh
 ```
 
 The script will:
 1. Auto-detect your Pi's LAN IP and set `MYNOTES_DOMAIN=mynotes.<IP>.nip.io`
-2. Create a `.env` file and prompt for any missing secrets
-3. Build the Docker image and start the app + Caddy
-4. Caddy will obtain a Let's Encrypt certificate automatically (~30 seconds)
+2. Create a `deploy/.env` file and prompt for any missing secrets
+3. Build the Docker image (Stage 1: `pnpm install` + `pnpm build`; Stage 2: copy artefacts)
+4. Start the app + Caddy reverse proxy
+5. Caddy obtains a Let's Encrypt certificate automatically (~30 seconds)
 
 Open `https://mynotes.<YOUR_PI_IP>.nip.io` in your browser.
 
 ### Manual setup (if you prefer not to use the script)
 
 ```bash
-cd /path/to/mynotes/deploy
+cd mynotes/deploy
 
-# 1. Create .env
+# 1. Create deploy/.env from the template
 cp env-example.txt .env
 # Edit .env — set MYNOTES_DOMAIN, DATABASE_URL, JWT_SECRET, etc.
 
-# 2. Start
+# 2. Build and start
 docker compose up -d --build
 
 # 3. Watch logs
@@ -104,11 +119,11 @@ devices to trust it permanently (see below).
 ### Start with self-signed certificate
 
 ```bash
-cd /path/to/mynotes/deploy
+cd mynotes/deploy
 
-# 1. Create .env — set MYNOTES_DOMAIN to your Pi's IP or nip.io address
+# 1. Create deploy/.env — set MYNOTES_DOMAIN to your Pi's nip.io address
 cp env-example.txt .env
-# Edit MYNOTES_DOMAIN=mynotes.192.168.1.50.nip.io
+# Edit: MYNOTES_DOMAIN=mynotes.192.168.1.50.nip.io
 
 # 2. Start with the self-signed compose file
 docker compose -f docker-compose.selfsigned.yml up -d --build
@@ -139,6 +154,38 @@ docker compose -f docker-compose.selfsigned.yml exec caddy \
 
 ---
 
+## How the Docker build works
+
+The `Dockerfile` uses a two-stage build:
+
+| Stage | What happens |
+|---|---|
+| **Stage 1 (builder)** | `pnpm install` (all deps) → `pnpm build` (Vite frontend + esbuild server) |
+| **Stage 2 (runtime)** | Copies `node_modules/` + `dist/` from Stage 1; sets `NODE_ENV=production` |
+
+**Why copy the full `node_modules`?** The server bundle uses
+`esbuild --packages=external`, so all packages remain as runtime imports.
+The `server/_core/vite.ts` module is always present in the bundle (it is
+guarded by `NODE_ENV` at runtime, not at build time), so `vite` and its
+plugins must exist in `node_modules` even in production.
+
+A `.dockerignore` file at the project root excludes `node_modules/`, `dist/`,
+`.git/`, and other large directories from the build context, so Docker only
+sends source files to the build daemon — keeping the build fast on the Pi.
+
+---
+
+## Updating to a new version
+
+```bash
+cd mynotes
+git pull
+cd deploy
+docker compose up -d --build   # rebuilds the image with the latest code
+```
+
+---
+
 ## Useful commands
 
 ```bash
@@ -148,15 +195,17 @@ docker compose logs -f
 # View only Caddy logs (certificate renewal, access)
 docker compose logs -f caddy
 
+# View only app logs
+docker compose logs -f app
+
 # Stop everything
 docker compose down
 
 # Restart after a config change
 docker compose restart caddy
 
-# Update to the latest code
-git pull
-docker compose up -d --build
+# Check running containers
+docker compose ps
 ```
 
 ---
@@ -170,13 +219,15 @@ docker compose up -d --build
 | `NET::ERR_CERT_AUTHORITY_INVALID` | Self-signed cert not trusted | Click "Advanced → Proceed", or install the Caddy root CA |
 | App loads but login fails | OAuth redirect URL mismatch | Ensure `VITE_APP_ID` matches the domain registered in Manus OAuth settings |
 | nip.io domain not resolving | DNS not propagated | Wait 30 seconds; nip.io is instant but some resolvers cache aggressively |
+| `Cannot find package 'vite'` | Old image cached without full node_modules | Run `docker compose build --no-cache` to force a clean rebuild |
+| Build very slow on Pi | Large build context | Ensure `.dockerignore` is present at the project root |
 
 ---
 
 ## Security notes
 
-- The `.env` file contains secrets — never commit it to version control.
-  It is already listed in `.gitignore`.
+- The `deploy/.env` file contains secrets — never commit it to version control.
+  It is already listed in `.gitignore` and `.dockerignore`.
 - Let's Encrypt certificates are renewed automatically by Caddy every 60 days.
 - The Caddy container stores certificate data in a named Docker volume
   (`caddy_data`) — this persists across container restarts.

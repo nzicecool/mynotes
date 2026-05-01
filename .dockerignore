@@ -1,5 +1,11 @@
-# Dependencies (reinstalled inside Docker)
+# ── .dockerignore ─────────────────────────────────────────────────────────────
+# Excludes large/unnecessary directories from the Docker build context.
+# Saves ~600MB of node_modules being sent to the Docker daemon on every build.
+# Stage 1 of the Dockerfile runs "pnpm install" fresh inside the container.
+
+# Dependencies (reinstalled inside Docker by pnpm install)
 node_modules/
+.pnpm-store/
 
 # Build output (generated during Docker build)
 dist/
@@ -11,10 +17,9 @@ client/dist/
 *.test.ts
 *.spec.ts
 
-# Environment files — NEVER bake secrets into the image
-.env
-.env.*
-!.env.example
+# Environment secrets — NEVER bake into the image
+# Note: deploy/.env is the only .env file used by docker compose
+deploy/.env
 
 # Version control
 .git/
@@ -36,4 +41,17 @@ pnpm-debug.log*
 README.md
 CHANGELOG.md
 docs/
-deploy/
+
+# Test databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Coverage and test output
+coverage/
+.nyc_output/
