@@ -29,6 +29,27 @@ echo "║   MyNotes — HTTPS Setup (nip.io + Caddy)    ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 
+# ── 0. Ensure the repo is up to date ────────────────────────────────────────
+# The Docker build needs ALL files in the repo (including patches/).  
+# If this is an old clone, pnpm install will fail with ENOENT on patch files.
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if git -C "$REPO_ROOT" rev-parse --git-dir &>/dev/null; then
+  echo "Pulling latest changes from GitHub..."
+  git -C "$REPO_ROOT" fetch origin --quiet
+  LOCAL=$(git -C "$REPO_ROOT" rev-parse HEAD)
+  REMOTE=$(git -C "$REPO_ROOT" rev-parse origin/main 2>/dev/null || echo "")
+  if [[ -n "$REMOTE" && "$LOCAL" != "$REMOTE" ]]; then
+    echo "  Repo is out of date — running git pull..."
+    git -C "$REPO_ROOT" pull --ff-only origin main
+    echo "  ✓ Repo updated to $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+  else
+    echo "  ✓ Repo is up to date ($(git -C "$REPO_ROOT" rev-parse --short HEAD))"
+  fi
+else
+  echo "  (Not a git repo — skipping update check)"
+fi
+echo ""
+
 # ── 1. Detect LAN IP ──────────────────────────────────────────────────────────
 PI_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)
 if [[ -z "$PI_IP" ]]; then
