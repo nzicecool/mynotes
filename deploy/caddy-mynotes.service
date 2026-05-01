@@ -1,0 +1,29 @@
+[Unit]
+Description=Caddy HTTPS reverse proxy for MyNotes
+Documentation=https://caddyserver.com/docs/
+After=network-online.target mynotes.service
+Wants=network-online.target
+Requires=mynotes.service
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile.mynotes
+ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile.mynotes --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+PrivateTmp=true
+ProtectSystem=full
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Load the MYNOTES_DOMAIN env var from the same secrets file
+EnvironmentFile=/etc/mynotes/env
+
+# Logging — view with: journalctl -u caddy-mynotes -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=caddy-mynotes
+
+[Install]
+WantedBy=multi-user.target

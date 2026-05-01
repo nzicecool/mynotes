@@ -1,0 +1,29 @@
+[Unit]
+Description=MyNotes — encrypted note-taking app
+Documentation=https://github.com/nzicecool/mynotes
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/mynotes
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+
+# Environment
+Environment=NODE_ENV=production
+# Load secrets from /etc/mynotes/env (created by setup-local.sh)
+EnvironmentFile=/etc/mynotes/env
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging — view with: journalctl -u mynotes -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mynotes
+
+[Install]
+WantedBy=multi-user.target

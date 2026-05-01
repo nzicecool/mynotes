@@ -1,0 +1,21 @@
+# Caddyfile.local — Native install (no Docker)
+# Used by: deploy/setup-local.sh
+#
+# Caddy listens on ports 80 and 443, obtains a Let's Encrypt certificate
+# for the nip.io domain, and reverse-proxies to the Node.js app on port 3000.
+#
+# The {$MYNOTES_DOMAIN} placeholder is replaced at runtime by Caddy from
+# the environment variable set in the caddy-mynotes.service unit file.
+
+{$MYNOTES_DOMAIN} {
+    # Reverse proxy all traffic to the Node.js app
+    reverse_proxy localhost:3000
+
+    # Enable access logging
+    log {
+        output file /var/log/caddy/mynotes-access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}

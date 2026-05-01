@@ -2,8 +2,7 @@
 
 This guide explains how to run MyNotes over HTTPS on a Raspberry Pi using
 **Caddy** as a reverse proxy and **nip.io** as a free wildcard DNS service.
-Two options are provided depending on whether your Pi is reachable from the
-internet.
+Three options are provided — choose the one that best fits your setup.
 
 ---
 
@@ -31,41 +30,28 @@ for Let's Encrypt to issue a trusted TLS certificate.
 
 ---
 
-## Prerequisites
+## Choosing an Option
 
-### 1. Install Docker and Docker Compose
-
-```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose-plugin
-sudo usermod -aG docker $USER   # allow running docker without sudo
-newgrp docker                   # apply group change in current shell
-```
-
-Verify the installation:
-
-```bash
-docker --version
-docker compose version
-```
-
-### 2. Clone the repository
-
-```bash
-git clone https://github.com/nzicecool/mynotes.git
-cd mynotes
-```
+| | Option A — Native | Option B — Docker | Option C — Docker self-signed |
+|---|---|---|---|
+| **Docker required** | No | Yes | Yes |
+| **Certificate type** | Let's Encrypt (trusted) | Let's Encrypt (trusted) | Self-signed (browser warning) |
+| **Port forwarding required** | Yes (80 + 443) | Yes (80 + 443) | No |
+| **Auto-starts on reboot** | Yes (systemd) | Yes (docker compose) | Yes (docker compose) |
+| **Best for** | Keeping a clean native install | Isolated container setup | No port forwarding available |
 
 ---
 
-## Option A — Let's Encrypt (trusted certificate, recommended)
+## Option A — Native Install (no Docker, recommended)
 
-**Requirement:** Ports **80** and **443** must be reachable from the internet
-so Let's Encrypt can complete its HTTP-01 ACME challenge.
+This is the simplest approach if you already have Node.js on the Pi and prefer
+not to use Docker. Caddy and the Node.js app both run as systemd services and
+start automatically on reboot.
 
-### Router port forwarding
+### Prerequisites
 
-Log in to your router and add two port-forward rules:
+Ports **80** and **443** must be reachable from the internet so Let's Encrypt
+can complete its HTTP-01 ACME challenge. Log in to your router and add:
 
 | External port | Internal IP | Internal port | Protocol |
 |---|---|---|---|
@@ -75,76 +61,145 @@ Log in to your router and add two port-forward rules:
 ### One-command setup
 
 ```bash
+# Clone the repo (if you haven't already)
+git clone https://github.com/nzicecool/mynotes.git
 cd mynotes/deploy
+
+# Run the setup script as root
+sudo bash setup-local.sh
+```
+
+The script will automatically:
+1. Pull the latest code from GitHub
+2. Install Node.js 20 LTS, pnpm, and Caddy (if not already present)
+3. Detect your Pi's LAN IP and set `MYNOTES_DOMAIN=mynotes.<IP>.nip.io`
+4. Create `/etc/mynotes/env` with required secrets (prompts for missing values)
+5. Run `pnpm install && pnpm build`
+6. Install and start two systemd services: `mynotes` and `caddy-mynotes`
+7. Caddy obtains a Let's Encrypt certificate automatically (~30 seconds)
+
+Open `https://mynotes.<YOUR_PI_IP>.nip.io` in your browser.
+
+### Updating to a new version
+
+```bash
+cd mynotes/deploy
+sudo bash setup-local.sh
+```
+
+The script pulls the latest code, rebuilds, and restarts both services.
+
+### Useful commands
+
+```bash
+# View app logs
+journalctl -u mynotes -f
+
+# View Caddy / certificate logs
+journalctl -u caddy-mynotes -f
+
+# Stop both services
+sudo systemctl stop mynotes caddy-mynotes
+
+# Start both services
+sudo systemctl start mynotes caddy-mynotes
+
+# Check service status
+sudo systemctl status mynotes caddy-mynotes
+```
+
+### How it works
+
+Two systemd unit files are installed from the `deploy/` directory:
+
+| Service | File | What it does |
+|---|---|---|
+| `mynotes` | `mynotes.service` | Runs `node dist/index.js` on port 3000, loads secrets from `/etc/mynotes/env` |
+| `caddy-mynotes` | `caddy-mynotes.service` | Runs Caddy with `Caddyfile.local`, reverse-proxies port 443 → 3000, handles Let's Encrypt |
+
+Secrets are stored in `/etc/mynotes/env` (readable only by root and the app
+user) — never in the repo.
+
+---
+
+## Option B — Docker + Let's Encrypt (trusted certificate)
+
+**Requirement:** Ports **80** and **443** must be reachable from the internet.
+
+### Router port forwarding
+
+| External port | Internal IP | Internal port | Protocol |
+|---|---|---|---|
+| 80 | `<Pi LAN IP>` | 80 | TCP |
+| 443 | `<Pi LAN IP>` | 443 | TCP |
+
+### One-command setup
+
+```bash
+# Install Docker (if not already installed)
+sudo apt update && sudo apt install -y docker.io docker-compose-plugin
+sudo usermod -aG docker $USER && newgrp docker
+
+# Clone the repo
+git clone https://github.com/nzicecool/mynotes.git
+cd mynotes/deploy
+
 chmod +x setup.sh
 ./setup.sh
 ```
 
-The script will:
-1. Auto-detect your Pi's LAN IP and set `MYNOTES_DOMAIN=mynotes.<IP>.nip.io`
-2. Create a `deploy/.env` file and prompt for any missing secrets
-3. Build the Docker image (Stage 1: `pnpm install` + `pnpm build`; Stage 2: copy artefacts)
-4. Start the app + Caddy reverse proxy
-5. Caddy obtains a Let's Encrypt certificate automatically (~30 seconds)
+`setup.sh` auto-detects your Pi's IP, creates `deploy/.env`, and runs
+`docker compose up -d --build`. Caddy obtains a certificate automatically.
 
-Open `https://mynotes.<YOUR_PI_IP>.nip.io` in your browser.
-
-### Manual setup (if you prefer not to use the script)
+### Updating to a new version
 
 ```bash
 cd mynotes/deploy
+./setup.sh   # pulls latest code and rebuilds the Docker image
+```
 
-# 1. Create deploy/.env from the template
-cp env-example.txt .env
-# Edit .env — set MYNOTES_DOMAIN, DATABASE_URL, JWT_SECRET, etc.
+### Useful commands
 
-# 2. Build and start
-docker compose up -d --build
-
-# 3. Watch logs
-docker compose logs -f caddy
+```bash
+docker compose logs -f          # all logs
+docker compose logs -f caddy    # certificate / access logs
+docker compose logs -f app      # app logs
+docker compose down             # stop everything
+docker compose up -d --build    # rebuild and restart
 ```
 
 ---
 
-## Option B — Self-signed certificate (no port forwarding needed)
+## Option C — Docker + Self-signed Certificate (no port forwarding)
 
-Use this when your Pi is behind a strict NAT, or your ISP blocks port 80.
-Caddy generates its own internal CA and issues a self-signed certificate.
-
-**Trade-off:** Browsers will show a security warning on first visit. You can
-click "Advanced → Proceed" to accept it, or install the Caddy root CA on your
-devices to trust it permanently (see below).
-
-### Start with self-signed certificate
+Use this when your Pi is behind a strict NAT or your ISP blocks port 80.
 
 ```bash
+# Install Docker (if not already installed)
+sudo apt update && sudo apt install -y docker.io docker-compose-plugin
+sudo usermod -aG docker $USER && newgrp docker
+
+# Clone the repo
+git clone https://github.com/nzicecool/mynotes.git
 cd mynotes/deploy
 
-# 1. Create deploy/.env — set MYNOTES_DOMAIN to your Pi's nip.io address
+# Create deploy/.env from the template
 cp env-example.txt .env
-# Edit: MYNOTES_DOMAIN=mynotes.192.168.1.50.nip.io
+# Edit .env — set MYNOTES_DOMAIN=mynotes.192.168.x.x.nip.io and other secrets
 
-# 2. Start with the self-signed compose file
 docker compose -f docker-compose.selfsigned.yml up -d --build
 ```
 
-Open `https://mynotes.<YOUR_PI_IP>.nip.io` and accept the certificate warning.
-
-### Trust the Caddy root CA (optional — removes the browser warning)
-
-After starting the containers, export the Caddy root CA and install it on each
-device you use to access MyNotes:
+Open `https://mynotes.<YOUR_PI_IP>.nip.io` and accept the certificate warning,
+or install the Caddy root CA on your devices to trust it permanently:
 
 ```bash
-# Export the CA certificate
+# Export the Caddy root CA
 docker compose -f docker-compose.selfsigned.yml exec caddy \
   cat /data/caddy/pki/authorities/local/root.crt > caddy-root-ca.crt
 ```
 
-**Install on each device:**
-
-| OS | Steps |
+| OS | Install steps |
 |---|---|
 | **macOS** | Double-click `caddy-root-ca.crt` → Keychain Access → Trust → Always Trust |
 | **Windows** | Double-click → Install Certificate → Local Machine → Trusted Root CAs |
@@ -154,82 +209,16 @@ docker compose -f docker-compose.selfsigned.yml exec caddy \
 
 ---
 
-## How the Docker build works
-
-The `Dockerfile` uses a two-stage build:
-
-| Stage | What happens |
-|---|---|
-| **Stage 1 (builder)** | `pnpm install` (all deps) → `pnpm build` (Vite frontend + esbuild server) |
-| **Stage 2 (runtime)** | Copies `node_modules/` + `dist/` from Stage 1; sets `NODE_ENV=production` |
-
-**Why copy the full `node_modules`?** The server bundle uses
-`esbuild --packages=external`, so all packages remain as runtime imports.
-The `server/_core/vite.ts` module is always present in the bundle (it is
-guarded by `NODE_ENV` at runtime, not at build time), so `vite` and its
-plugins must exist in `node_modules` even in production.
-
-A `.dockerignore` file at the project root excludes `node_modules/`, `dist/`,
-`.git/`, and other large directories from the build context, so Docker only
-sends source files to the build daemon — keeping the build fast on the Pi.
-
----
-
-## Updating to a new version
-
-```bash
-cd mynotes
-git pull
-cd deploy
-docker compose up -d --build   # rebuilds the image with the latest code
-```
-
----
-
-## Useful commands
-
-```bash
-# View all logs
-docker compose logs -f
-
-# View only Caddy logs (certificate renewal, access)
-docker compose logs -f caddy
-
-# View only app logs
-docker compose logs -f app
-
-# Stop everything
-docker compose down
-
-# Restart after a config change
-docker compose restart caddy
-
-# Check running containers
-docker compose ps
-```
-
----
-
 ## Troubleshooting
 
 | Problem | Cause | Fix |
 |---|---|---|
-| Certificate not issued | Port 80/443 not reachable from internet | Check router port forwarding; use Option B instead |
-| `ERR_CONNECTION_REFUSED` | App not started | Run `docker compose logs app` to check for errors |
+| Certificate not issued | Port 80/443 not reachable from internet | Check router port forwarding; use Option C instead |
+| `ERR_CONNECTION_REFUSED` | App not started | Check `journalctl -u mynotes` or `docker compose logs app` |
 | `NET::ERR_CERT_AUTHORITY_INVALID` | Self-signed cert not trusted | Click "Advanced → Proceed", or install the Caddy root CA |
 | App loads but login fails | OAuth redirect URL mismatch | Ensure `VITE_APP_ID` matches the domain registered in Manus OAuth settings |
 | nip.io domain not resolving | DNS not propagated | Wait 30 seconds; nip.io is instant but some resolvers cache aggressively |
-| `Cannot find package 'vite'` | Old image cached without full node_modules | Run `docker compose build --no-cache` to force a clean rebuild |
-| Build very slow on Pi | Large build context | Ensure `.dockerignore` is present at the project root |
-
----
-
-## Security notes
-
-- The `deploy/.env` file contains secrets — never commit it to version control.
-  It is already listed in `.gitignore` and `.dockerignore`.
-- Let's Encrypt certificates are renewed automatically by Caddy every 60 days.
-- The Caddy container stores certificate data in a named Docker volume
-  (`caddy_data`) — this persists across container restarts.
-- For production use, consider restricting access to the app by IP range
-  using Caddy's `remote_ip` matcher if the Pi is internet-facing.
+| `ENOENT: patches/wouter@3.7.1.patch` | Old clone missing the patches directory | Run `git pull` then retry the build |
+| Build very slow on Pi (Docker) | Large build context | Ensure `.dockerignore` is present at the project root |
+| `Cannot find package 'vite'` (Docker) | Old image cached without full node_modules | Run `docker compose build --no-cache` |
+| Node.js version too old (native) | Node < 20 installed | The setup script installs Node 20 LTS automatically |
