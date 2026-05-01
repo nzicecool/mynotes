@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { Shield, Lock, Cloud, Zap, FileText, Tag } from "lucide-react";
+import { Shield, Lock, Cloud, Zap, FileText, Tag, Github } from "lucide-react";
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -29,7 +29,16 @@ export default function Home() {
           </div>
           <span className="text-2xl font-bold text-gray-900">MyNotes</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <a
+            href="https://github.com/nzicecool/mynotes"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-white/60 transition-colors"
+            aria-label="View MyNotes on GitHub"
+          >
+            <Github className="w-5 h-5" />
+          </a>
           <Button variant="outline" onClick={() => setLocation("/login")}>Sign In</Button>
           <Button onClick={() => setLocation("/register")}>Get Started</Button>
         </div>
@@ -109,7 +118,19 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="container mx-auto px-4 py-8 text-center text-gray-600">
-        <p>&copy; 2026 MyNotes. Your privacy is our priority.</p>
+        <div className="flex items-center justify-center gap-4 mb-2">
+          <a
+            href="https://github.com/nzicecool/mynotes"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors text-sm"
+            aria-label="View MyNotes on GitHub"
+          >
+            <Github className="w-4 h-4" />
+            nzicecool/mynotes
+          </a>
+        </div>
+        <p className="text-sm">&copy; 2026 MyNotes. Your privacy is our priority.</p>
       </footer>
     </div>
   );
