@@ -1,42 +1,56 @@
 # ── Stage 1: build ────────────────────────────────────────────────────────────
+# Installs all dependencies, builds the frontend (Vite) and bundles the
+# backend (esbuild --packages=external).
+#
+# NOTE: The server bundle uses --packages=external, which means node_modules
+# are NOT inlined — they are required at runtime. The server/_core/vite.ts
+# module is always imported (even in production mode it is tree-shaken at
+# runtime via the NODE_ENV guard), so vite and its plugins must remain in
+# node_modules. For this reason we copy the full node_modules to the runtime
+# stage rather than running a separate --prod install.
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pin the exact pnpm version from package.json#packageManager
+ENV PNPM_VERSION=10.4.1
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-# Copy dependency manifests first (layer cache)
+# Copy dependency manifests first for layer caching
 COPY package.json pnpm-lock.yaml ./
 
-# Install all dependencies (including devDeps needed for build)
+# Install ALL dependencies (dev + prod) — vite/esbuild are needed for build
+# and vite is also imported by the server bundle at runtime
 RUN pnpm install --frozen-lockfile
 
-# Copy source
+# Copy full source
 COPY . .
 
-# Build frontend (Vite) + backend (esbuild)
+# Build: Vite (frontend -> dist/public) + esbuild (server -> dist/index.js)
 RUN pnpm build
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
+# Lean image: built artefacts + full node_modules (vite is a runtime dep here)
 FROM node:20-alpine AS runtime
 
 WORKDIR /app
 
-# Install pnpm for production install
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Copy the full node_modules from builder.
+# We cannot prune --prod because the server bundle imports vite at the module
+# level (server/_core/vite.ts) even though it is only called in dev mode.
+COPY --from=builder /app/node_modules ./node_modules
 
-# Copy dependency manifests
-COPY package.json pnpm-lock.yaml ./
-
-# Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod
-
-# Copy built artefacts from builder
+# Copy built artefacts
 COPY --from=builder /app/dist ./dist
 
-# Expose app port
+# Copy package.json so Node can resolve the "type" field (ESM/CJS)
+COPY --from=builder /app/package.json ./package.json
+
+# Expose app port (PORT env var overrides; default 3000)
 EXPOSE 3000
+
+# Run in production mode so the server uses serveStatic (not Vite dev server)
+ENV NODE_ENV=production
 
 # Start the server
 CMD ["node", "dist/index.js"]
