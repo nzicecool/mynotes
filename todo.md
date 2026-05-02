@@ -180,3 +180,5 @@
 - [x] Fix setup-local.sh HTTPS: use self-signed cert (no Let's Encrypt, no port forwarding)
 - [x] Fix SQLite path: db.ts now parses DATABASE_URL (sqlite: prefix) as fallback when SQLITE_PATH is not set
 - [x] Add GitHub icon + link (https://github.com/nzicecool/mynotes) to top navigation and footer
+- [x] Create standalone static landing page (docs/index.html) for GitHub Pages deployment
+- [x] Add GitHub Actions workflow to auto-deploy landing page to GitHub Pages
