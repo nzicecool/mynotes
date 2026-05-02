@@ -182,3 +182,8 @@
 - [x] Add GitHub icon + link (https://github.com/nzicecool/mynotes) to top navigation and footer
 - [x] Create standalone static landing page (docs/index.html) for GitHub Pages deployment
 - [x] Add GitHub Actions workflow to auto-deploy landing page to GitHub Pages
+
+## GitHub Pages Landing Page Improvements
+- [x] Add GitHub Pages badge to README.md
+- [x] Replace HTML mockup in docs/index.html hero with real app screenshot
+- [x] Create CONTRIBUTING.md with contribution guide

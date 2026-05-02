@@ -129,88 +129,35 @@
     .stat-value { font-size: 1.6rem; font-weight: 800; color: var(--indigo); }
     .stat-label { font-size: .8rem; color: var(--gray-500); font-weight: 500; margin-top: .1rem; }
 
-    /* ── APP MOCKUP ── */
+    /* ── APP SCREENSHOT ── */
     .mockup-section {
       padding: 4rem 1.5rem;
       background: var(--gray-50);
     }
     .mockup-wrap {
       max-width: 960px; margin: 0 auto;
-      background: #fff; border-radius: 16px;
-      box-shadow: var(--shadow-lg);
-      overflow: hidden; border: 1px solid var(--gray-200);
+      background: #1a1a2e; border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(79,70,229,.18), 0 8px 24px rgba(0,0,0,.12);
+      overflow: hidden; border: 1px solid rgba(255,255,255,.08);
     }
     .mockup-bar {
-      background: var(--gray-100); padding: .6rem 1rem;
+      background: #16213e; padding: .6rem 1rem;
       display: flex; align-items: center; gap: .5rem;
-      border-bottom: 1px solid var(--gray-200);
+      border-bottom: 1px solid rgba(255,255,255,.06);
     }
     .dot { width: 12px; height: 12px; border-radius: 50%; }
     .dot-red { background: #ff5f57; }
     .dot-yellow { background: #febc2e; }
     .dot-green { background: #28c840; }
     .mockup-url {
-      flex: 1; background: #fff; border-radius: 6px;
-      padding: .25rem .75rem; font-size: .78rem; color: var(--gray-500);
+      flex: 1; background: rgba(255,255,255,.07); border-radius: 6px;
+      padding: .25rem .75rem; font-size: .78rem; color: rgba(255,255,255,.45);
       font-family: 'JetBrains Mono', monospace;
-      border: 1px solid var(--gray-200); margin: 0 .5rem;
+      border: 1px solid rgba(255,255,255,.08); margin: 0 .5rem;
     }
-    .mockup-body {
-      display: grid; grid-template-columns: 220px 1fr;
-      min-height: 420px;
-    }
-    .mock-sidebar {
-      background: #fafafa; border-right: 1px solid var(--gray-200);
-      padding: 1rem;
-    }
-    .mock-sidebar-header {
-      font-size: .7rem; font-weight: 700; color: var(--gray-400);
-      text-transform: uppercase; letter-spacing: .08em;
-      margin-bottom: .75rem; padding: 0 .25rem;
-    }
-    .mock-note-item {
-      padding: .5rem .6rem; border-radius: 7px; margin-bottom: .3rem;
-      cursor: pointer; transition: background .1s;
-    }
-    .mock-note-item.active { background: var(--indigo-50); }
-    .mock-note-item:not(.active):hover { background: var(--gray-100); }
-    .mock-note-title { font-size: .82rem; font-weight: 600; color: var(--gray-800); }
-    .mock-note-preview { font-size: .72rem; color: var(--gray-400); margin-top: .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mock-note-date { font-size: .68rem; color: var(--gray-400); margin-top: .2rem; }
-    .mock-tag {
-      display: inline-block; font-size: .65rem; font-weight: 600;
-      padding: .1rem .4rem; border-radius: 4px; margin-top: .2rem;
-    }
-    .tag-blue { background: #dbeafe; color: #1d4ed8; }
-    .tag-green { background: #d1fae5; color: #065f46; }
-    .tag-purple { background: #ede9fe; color: #5b21b6; }
-    .tag-amber { background: #fef3c7; color: #92400e; }
-    .mock-editor { padding: 1.5rem 2rem; flex: 1; }
-    .mock-editor-title {
-      font-size: 1.4rem; font-weight: 700; color: var(--gray-900);
-      margin-bottom: .5rem; border: none; outline: none; width: 100%;
-    }
-    .mock-editor-toolbar {
-      display: flex; gap: .3rem; margin-bottom: 1rem;
-      padding-bottom: .75rem; border-bottom: 1px solid var(--gray-100);
-    }
-    .mock-tool {
-      width: 28px; height: 28px; border-radius: 5px;
-      background: var(--gray-100); display: flex; align-items: center; justify-content: center;
-      font-size: .7rem; font-weight: 700; color: var(--gray-600);
-    }
-    .mock-tool.active { background: var(--indigo-100); color: var(--indigo); }
-    .mock-editor-content { font-size: .85rem; color: var(--gray-700); line-height: 1.7; }
-    .mock-editor-content .code-block {
-      background: var(--gray-100); border-radius: 6px; padding: .6rem .9rem;
-      font-family: 'JetBrains Mono', monospace; font-size: .78rem;
-      color: var(--indigo-dark); margin: .6rem 0;
-    }
-    .mock-save-badge {
-      display: inline-flex; align-items: center; gap: .3rem;
-      font-size: .7rem; color: var(--green); font-weight: 600;
-      background: #d1fae5; padding: .2rem .5rem; border-radius: 4px;
-      float: right; margin-top: .25rem;
+    .mockup-screenshot {
+      display: block; width: 100%; height: auto;
+      border-radius: 0 0 15px 15px;
     }
 
     /* ── SECTIONS ── */
@@ -433,7 +380,7 @@
   </div>
 </div>
 
-<!-- ── APP MOCKUP ── -->
+<!-- ── APP SCREENSHOT ── -->
 <div class="mockup-section">
   <div class="mockup-wrap">
     <div class="mockup-bar">
@@ -442,61 +389,12 @@
       <div class="dot dot-green"></div>
       <div class="mockup-url">https://mynotes.192.168.1.10.nip.io</div>
     </div>
-    <div class="mockup-body">
-      <div class="mock-sidebar">
-        <div class="mock-sidebar-header">All Notes</div>
-        <div class="mock-note-item active">
-          <div class="mock-note-title">Raspberry Pi Setup</div>
-          <div class="mock-note-preview">Install Node.js 20, clone repo...</div>
-          <div class="mock-note-date">Today, 2:14 PM</div>
-          <span class="mock-tag tag-blue">Pi</span>
-          <span class="mock-tag tag-green">Setup</span>
-        </div>
-        <div class="mock-note-item">
-          <div class="mock-note-title">Project Ideas</div>
-          <div class="mock-note-preview">1. Home automation dashboard...</div>
-          <div class="mock-note-date">Yesterday</div>
-          <span class="mock-tag tag-purple">Ideas</span>
-        </div>
-        <div class="mock-note-item">
-          <div class="mock-note-title">Shopping List</div>
-          <div class="mock-note-preview">☑ Milk  ☑ Eggs  ☐ Bread...</div>
-          <div class="mock-note-date">Mon 28 Apr</div>
-          <span class="mock-tag tag-amber">Personal</span>
-        </div>
-        <div class="mock-note-item">
-          <div class="mock-note-title">Meeting Notes</div>
-          <div class="mock-note-preview">Q2 planning — action items...</div>
-          <div class="mock-note-date">Fri 25 Apr</div>
-          <span class="mock-tag tag-blue">Work</span>
-        </div>
-      </div>
-      <div class="mock-editor">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <div class="mock-editor-title">Raspberry Pi Setup</div>
-          <span class="mock-save-badge">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-            Saved
-          </span>
-        </div>
-        <div class="mock-editor-toolbar">
-          <div class="mock-tool active">B</div>
-          <div class="mock-tool"><em>I</em></div>
-          <div class="mock-tool" style="text-decoration:underline">U</div>
-          <div class="mock-tool">H1</div>
-          <div class="mock-tool">≡</div>
-          <div class="mock-tool">&lt;/&gt;</div>
-          <div class="mock-tool">🏷</div>
-        </div>
-        <div class="mock-editor-content">
-          <p><strong>Install Node.js 20 LTS</strong></p>
-          <div class="code-block">curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -<br>sudo apt-get install -y nodejs</div>
-          <p style="margin-top:.5rem"><strong>Clone and build</strong></p>
-          <div class="code-block">git clone https://github.com/nzicecool/mynotes.git<br>cd mynotes/deploy && sudo bash setup-local.sh</div>
-          <p style="margin-top:.5rem;color:#6b7280;font-size:.82rem">App will be available at <span style="color:#4f46e5;font-family:'JetBrains Mono',monospace">https://mynotes.&lt;IP&gt;.nip.io</span> with a self-signed certificate.</p>
-        </div>
-      </div>
-    </div>
+    <img
+      class="mockup-screenshot"
+      src="https://d2xsxph8kpxj0f.cloudfront.net/310419663031786415/DtwFRpTy3ZWQaCiDbRaN4M/app-screenshot_7f82ea19.webp"
+      alt="MyNotes dashboard showing the rich text editor with a note open, sidebar with note list, and formatting toolbar"
+      loading="lazy"
+    />
   </div>
 </div>
 

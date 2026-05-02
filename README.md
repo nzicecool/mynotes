@@ -1,5 +1,9 @@
 # MyNotes
 
+[![GitHub Pages](https://img.shields.io/badge/Landing%20Page-Live-4f46e5?style=flat-square&logo=github)](https://nzicecool.github.io/mynotes/)
+[![GitHub stars](https://img.shields.io/github/stars/nzicecool/mynotes?style=flat-square&logo=github)](https://github.com/nzicecool/mynotes/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+
 **MyNotes** is a secure, self-hosted note-taking application with end-to-end encryption, multiple note types, offline support, and real-time synchronisation across devices. All note content is encrypted client-side using AES-256-GCM before it ever reaches the server — your password and plaintext notes never leave your browser.
 
 ---
