@@ -1,0 +1,31 @@
+[package]
+name = "mynotes-desktop"
+version = "0.1.0"
+description = "Offline encrypted single-user notes vault"
+authors = ["nzicecool"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+name = "mynotes_desktop"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+mynotes-vault = { path = "../native" }
+serde = { version = "1", features = ["derive"] }
+rfd = "0.15"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "=3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "=3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "=3.6.3", features = ["windows-native"] }

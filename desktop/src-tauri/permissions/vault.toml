@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-vault"
+description = "Allow the bundled main window to call the validated vault API, not arbitrary SQL or filesystem operations."
+commands.allow = ["vault_status", "setup_vault", "unlock_vault", "lock_vault", "recover_vault", "change_pin", "regenerate_codes", "list_notes", "save_note", "delete_note", "export_backup", "restore_backup"]

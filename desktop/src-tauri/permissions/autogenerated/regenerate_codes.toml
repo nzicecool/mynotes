@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-regenerate-codes"
+description = "Enables the regenerate_codes command without any pre-configured scope."
+commands.allow = ["regenerate_codes"]
+
+[[permission]]
+identifier = "deny-regenerate-codes"
+description = "Denies the regenerate_codes command without any pre-configured scope."
+commands.deny = ["regenerate_codes"]

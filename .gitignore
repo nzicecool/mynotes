@@ -126,3 +126,12 @@ temp/
 
 # Deploy directory secrets
 deploy/.env
+.project-config.json
+
+# Native desktop build outputs and runtime vaults
+**/target/
+desktop/dist/
+desktop/src-tauri/gen/
+*.mynotes-backup
+*.db-wal
+*.db-shm

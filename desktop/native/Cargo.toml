@@ -1,0 +1,33 @@
+[package]
+name = "mynotes-vault"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Offline encrypted native vault for MyNotes Desktop"
+
+[dependencies]
+rusqlite = { version = "=0.37.0", features = ["bundled", "backup"] }
+aes-gcm = "=0.10.3"
+argon2 = "=0.5.3"
+rand = "=0.8.5"
+uuid = { version = "=1.18.1", features = ["v4"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.145", features = ["raw_value"] }
+base64 = "=0.22.1"
+zeroize = "=1.8.2"
+tempfile = "=3.23.0"
+thiserror = "=2.0.17"
+
+# Optimize the real cryptographic implementation in tests; no weaker test KDF.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
+[profile.test.package.argon2]
+opt-level = 3
+[profile.test.package.blake2]
+opt-level = 3
+
+[profile.test]
+opt-level = 2

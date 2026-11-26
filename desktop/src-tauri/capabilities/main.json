@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Bundled main window only; native vault state is checked on every operation.",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-destroy", "allow-vault"]
+}
