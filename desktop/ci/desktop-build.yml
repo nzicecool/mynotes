@@ -1,0 +1,78 @@
+# Inactive template: keep under desktop/ci unless separately authorized for activation.
+# Test artifacts only; no public signing, notarization, or runtime-verification claim.
+name: MyNotes Desktop test builds
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ['desktop/**', 'client/src/components/editors/**', 'package.json', 'pnpm-lock.yaml']
+  pull_request:
+    paths: ['desktop/**', 'client/src/components/editors/**', 'package.json', 'pnpm-lock.yaml']
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            command: desktop:build
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-x64
+          - os: windows-latest
+            command: desktop:build:windows
+            target: x86_64-pc-windows-msvc
+            artifact: windows-x64
+          - os: macos-14
+            command: desktop:build:macos
+            target: aarch64-apple-darwin
+            artifact: macos-arm64
+          - os: macos-15-intel
+            command: desktop:build:macos
+            target: x86_64-apple-darwin
+            artifact: macos-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@1.100.0
+        with:
+          targets: ${{ matrix.target }}
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            desktop/native
+            desktop/src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm desktop:check
+      - run: pnpm desktop:test
+      - name: Test native vault crate
+        working-directory: desktop/native
+        run: cargo test --manifest-path Cargo.toml
+      - name: Build test installer (not release-signed)
+        run: pnpm ${{ matrix.command }} --target ${{ matrix.target }}
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mynotes-${{ matrix.artifact }}-test-build
+          path: desktop/src-tauri/target/${{ matrix.target }}/release/bundle/**
+          if-no-files-found: error
+          retention-days: 14

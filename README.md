@@ -4,6 +4,10 @@
 [![GitHub stars](https://img.shields.io/github/stars/nzicecool/mynotes?style=flat-square&logo=github)](https://github.com/nzicecool/mynotes/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
+## Desktop edition
+
+The separate [MyNotes Desktop](desktop/README.md) target uses Tauri 2 with an encrypted local SQLite vault, a numeric PIN lock, and five recovery codes. It is single-user and works without a login, email service, server, or Raspberry Pi sync. See the desktop guide for platform builds and actual validation results. The web/Pi edition below is unchanged.
+
 **MyNotes** is a secure, self-hosted note-taking application with end-to-end encryption, multiple note types, offline support, and real-time synchronisation across devices. All note content is encrypted client-side using AES-256-GCM before it ever reaches the server — your password and plaintext notes never leave your browser.
 
 ---

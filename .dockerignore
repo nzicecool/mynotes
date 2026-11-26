@@ -55,3 +55,7 @@ docs/
 # Coverage and test output
 coverage/
 .nyc_output/
+
+# Desktop target is not used by the web/Pi Docker image
+desktop/
+**/target/
