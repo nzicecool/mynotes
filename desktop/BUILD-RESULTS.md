@@ -42,6 +42,14 @@ The Debian package declares WebKitGTK 4.1, GTK 3, DBus, GNOME Keyring, XDG Deskt
 
 The Linux installers are not release-signed. macOS app/DMG and Windows NSIS/offline-WebView2 configurations are included, along with an inactive cross-platform CI template under `desktop/ci`. **No native macOS/Windows build, installer, runtime validation, signing or notarization is claimed.** No live GitHub workflow or public release was activated.
 
+## macOS source-build troubleshooting update — 27 November 2026
+
+A user reported dependency installation failing at the web/Pi server's `better-sqlite3@12.9.0`, followed by missing `tsc`, `vitest`, and `tauri`. Desktop uses Rust `rusqlite` with bundled SQLite, not that Node native module. A fresh source checkout was verified on Linux using `NODE_ENV=development pnpm install --frozen-lockfile --prod=false --ignore-scripts`: all three local tools were available, desktop TypeScript passed, all 28 desktop unit tests passed, and the production desktop frontend plus bundle guard passed. This verifies the desktop-only install path on Linux, not a native Mac build. Skipping dependency install scripts does not repair the web/Pi server's native module, and optional platform dependencies must remain enabled.
+
+The user subsequently reported macOS DMG packaging failing in `bundle_dmg.sh` with Finder `AppleEvent timed out. (-1712)` and `Failed running AppleScript`. The recommended Mac guide now selects `pnpm run desktop:build:macos --bundles app`, bypassing the optional Finder/AppleScript DMG layout step. The configured app/DMG targets and signing settings are unchanged. This report shows that the user's build reached installer packaging; it is not verification of a complete usable app, successful installation, Keychain behavior, or Mac runtime. No successful app-only Mac build has been confirmed in this task.
+
+See `MACOS.md` for comment-free zsh commands, local tool checks, both reported errors, and optional DMG packaging.
+
 ## Remaining limits before a broader production release
 
 Use manual Lock vault or Ctrl/Cmd+L; there is no inactivity, blur or suspend-triggered lock. Use the operating system's screen lock when away. Ordinary native close has a save/lock fence, but OS window-manager close and interactive save-failure/backup-dialog paths have not all been end-to-end automated. Native backup/restore correctness is covered by the Rust tests; interactive file-chooser selection/cancellation is not part of the completed smoke test.

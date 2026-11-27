@@ -15,16 +15,20 @@ Linux x86-64 test builds and runtime checks are recorded in the [verification re
 On a Mac with Node.js 22.x, pnpm 10.4.1, Rust 1.90 or newer, and Xcode Command Line Tools installed as described in the [full guide](desktop/MACOS.md):
 
 ```sh
-git clone --branch main https://github.com/nzicecool/mynotes.git mynotes
-cd mynotes
-pnpm install --frozen-lockfile
-pnpm desktop:check
-pnpm desktop:test
-pnpm desktop:test:native
-pnpm desktop:build:macos
+git clone --branch main https://github.com/nzicecool/mynotes.git mynotes &&
+cd mynotes &&
+NODE_ENV=development pnpm install --frozen-lockfile --prod=false --ignore-scripts &&
+pnpm desktop:check &&
+pnpm desktop:test &&
+pnpm desktop:test:native &&
+pnpm run desktop:build:macos --bundles app
 ```
 
-The default app output is `desktop/src-tauri/target/release/bundle/macos/MyNotes Desktop.app`; DMGs go in the sibling `bundle/dmg/` directory. This is an unverified native build path with ad-hoc signing, not a notarized release. Desktop does **not** use the web/Pi `.env`, database setup, or server commands below.
+For this **desktop-only** install, `--prod=false` includes the local build tools and `--ignore-scripts` avoids compiling the web/Pi server's `better-sqlite3` Node module. Desktop uses Rust's bundled SQLite instead. Keep optional dependencies enabled for the platform-specific Tauri and frontend tools. Skipping install scripts does **not** repair or prepare the web/Pi server; use its normal setup separately.
+
+The recommended command builds only `desktop/src-tauri/target/release/bundle/macos/MyNotes Desktop.app`. Drag it into Applications. A DMG is optional: `--bundles app` avoids the Finder/AppleScript packaging step that can fail with `AppleEvent timed out. (-1712)`. See [macOS troubleshooting and optional DMG packaging](desktop/MACOS.md) for dependency-install failures, missing `tsc`/`vitest`/`tauri`, and the installer timeout. The copyable block has no shell comments and stops at the first error.
+
+This remains an unverified native runtime path with ad-hoc signing, not a notarized release. Desktop does **not** use the web/Pi `.env`, database setup, or server commands below.
 
 ## Web / Raspberry Pi edition (web/Pi only)
 

@@ -1,10 +1,10 @@
 # MyNotes Desktop
 
-MyNotes Desktop is a Tauri 2 application for a single user's offline notes. It uses local SQLite and authenticated encrypted records, not the web application's Express server. There is no login, registration, email configuration, Docker requirement, or Raspberry Pi connection.
+MyNotes Desktop is a Tauri 2 application for a single user's offline notes. Its vault uses Rust `rusqlite` with bundled SQLite and authenticated encrypted records, not the web application's Express server or web/Pi `better-sqlite3` native module. There is no login, registration, email configuration, Docker requirement, or Raspberry Pi connection.
 
 The desktop source is now on **`main`**, alongside the unchanged web/Pi target. **Mac users: follow the [complete macOS source-build and installation guide](MACOS.md).** No Mac installer has been released; the Linux `.deb` and `.AppImage` files are not Mac installers.
 
-Version 0.1.0 is an initial desktop build. See the [verification report](BUILD-RESULTS.md) for what was actually compiled and tested on Linux. Native macOS/Windows builds and runtime behavior have not been verified. Platform configurations are not proof of a tested or signed public release.
+Version 0.1.0 is an initial desktop build. See the [verification report](BUILD-RESULTS.md) for what was actually compiled and tested on Linux. A Mac user reached DMG packaging but encountered a Finder AppleEvent timeout; no successful Mac app installation or runtime has been verified. Completed native macOS/Windows builds and runtime behavior remain unverified. Platform configurations or reaching installer packaging are not proof of a tested or signed public release.
 
 ## First use
 
@@ -63,14 +63,14 @@ End users run installed applications without Node.js or Rust. Use Node.js **22.x
 For a fresh checkout (choose a parent directory where `mynotes` does not already exist):
 
 ```sh
-git clone --branch main https://github.com/nzicecool/mynotes.git mynotes
+git clone --branch main https://github.com/nzicecool/mynotes.git mynotes &&
 cd mynotes
 ```
 
 For an existing clone, first enter its repository root and run `git status`. **Commit your work or stash it before switching branches**; `git stash push --include-untracked` is an option if you are not ready to commit. Keep the stash until you deliberately restore it, and protect any local-only files. Then:
 
 ```sh
-git switch main
+git switch main &&
 git pull --ff-only origin main
 ```
 
@@ -78,24 +78,43 @@ If there is no local `main` yet, fetch it with `git fetch origin` and use `git s
 
 ### Install dependencies and run desktop checks
 
-After installing Node and Rust, install the pinned pnpm into your user directory without `sudo` or Corepack:
+The multi-command examples below use **Unix shell syntax** (Bash/zsh, including macOS Terminal), not Windows PowerShell syntax. In native Windows PowerShell, use the appropriate environment-variable and PATH syntax and run each step separately, stopping at the first failure. The Windows build target remains described below.
+
+After installing Node and Rust, install the pinned pnpm into your user directory without `sudo` or Corepack on Unix/macOS:
 
 ```sh
-npm install --global --prefix "$HOME/.local" pnpm@10.4.1
+npm install --global --prefix "$HOME/.local" pnpm@10.4.1 &&
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Repeat the export in each new Terminal, or manually add the same line to `~/.zshrc` if using zsh. The first dependency install and build need internet to download dependencies.
 
-Run these commands **from the repository root**, where `package.json` and `pnpm-lock.yaml` live, not from `desktop/` or `deploy/`:
+For the **desktop-only** dependency path on Unix/macOS, run this **from the repository root**, where `package.json`, `pnpm-lock.yaml`, and `patches/` live, not from `desktop/` or `deploy/`:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm desktop:check
-pnpm desktop:test
-pnpm desktop:test:native
+NODE_ENV=development pnpm install --frozen-lockfile --prod=false --ignore-scripts
+```
+
+`--prod=false` includes development tools even when production-only installation would otherwise apply; `NODE_ENV=development` makes the intended environment explicit. `--ignore-scripts` skips dependency lifecycle scripts, including the web/Pi `better-sqlite3` native-module build. The desktop vault does not use that module; its SQLite is bundled through Rust `rusqlite`. This does not skip explicit desktop checks or the Rust/Tauri build.
+
+Preserve the tracked lockfile and patches. Keep optional dependencies enabled for platform binaries such as esbuild/Rollup; do **not** add `--no-optional`. This bypass does **not** fix or validate web/Pi SQLite: that target needs a normal dependency installation and any necessary native rebuild as separate work before use. Do not install global `tsc`, `vitest`, or `tauri` to conceal a failed local installation, and do not ignore TypeScript failures.
+
+After installation succeeds, verify local tools, then run desktop checks and development mode. Each `&&` sequence stops at the first failure:
+
+```sh
+pnpm exec tsc --version &&
+pnpm exec vitest --version &&
+pnpm exec tauri --version
+```
+
+```sh
+pnpm desktop:check &&
+pnpm desktop:test &&
+pnpm desktop:test:native &&
 pnpm desktop:dev
 ```
+
+The desktop-only install was verified in a fresh Linux git archive: local tool version checks, desktop typecheck, all 28 frontend tests, and the desktop production bundle plus guard passed. This is not a macOS runtime or Keychain verification. See the [macOS installation troubleshooting](MACOS.md#better-sqlite3-installation-failure-then-missing-desktop-tools) for the reported native-module failure and downstream missing-tool errors.
 
 The Tauri hooks invoke the repository scripts `pnpm desktop:dev:web` and `pnpm desktop:build:web`; do not replace them with commands that assume pnpm stays in the `desktop` directory. Desktop does not require `.env`, `DATABASE_DRIVER`, `pnpm build`/`pnpm start`, `setup-local.sh`, HTTPS, Docker, or a MyNotes server.
 
@@ -104,10 +123,10 @@ The Tauri hooks invoke the repository scripts `pnpm desktop:dev:web` and `pnpm d
 On Linux, install build dependencies, WebKitGTK 4.1, DBus, and a working Secret Service provider. On Debian/Ubuntu:
 
 ```sh
-sudo apt update
+sudo apt update &&
 sudo apt install build-essential pkg-config curl libwebkit2gtk-4.1-dev \
   libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-  libdbus-1-dev gnome-keyring xdg-desktop-portal xdg-desktop-portal-gtk
+  libdbus-1-dev gnome-keyring xdg-desktop-portal xdg-desktop-portal-gtk &&
 pnpm desktop:build
 ```
 
@@ -127,18 +146,19 @@ The Windows configuration uses an NSIS installer with the offline WebView2 insta
 
 Use the [complete macOS guide](MACOS.md) for Xcode Command Line Tools, Node.js 22.x, pnpm 10.4.1, Rust, architecture selection, and safe source updates. Build **on a Mac**, using a native Apple Silicon (`arm64`) or Intel (`x64`) Node installation matched to rustup's default host. There is no universal-binary or verified Mac compatibility claim.
 
-With prerequisites installed and the source checked out from `main`, run from the repository root:
+With prerequisites installed and the source checked out from `main`, complete the desktop-only install and local tool checks above. Then run the recommended **app-only** build from the repository root:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm desktop:check
-pnpm desktop:test
-pnpm desktop:test:native
-pnpm desktop:build:macos
+pnpm desktop:check &&
+pnpm desktop:test &&
+pnpm desktop:test:native &&
+pnpm run desktop:build:macos --bundles app &&
 open desktop/src-tauri/target/release/bundle/macos
 ```
 
-The default outputs are `desktop/src-tauri/target/release/bundle/macos/MyNotes Desktop.app` and DMGs in `desktop/src-tauri/target/release/bundle/dmg/`. Drag **MyNotes Desktop.app** into **Applications** (`/Applications`), then open it there. These are expected output paths, not evidence of a completed Mac build.
+pnpm forwards arguments after the script name; use the command as shown, with **no extra `--` separator**. `--bundles app` skips the optional DMG wrapper and Finder-driven layout step. The expected output for this command is `desktop/src-tauri/target/release/bundle/macos/MyNotes Desktop.app`. Drag **MyNotes Desktop.app** into **Applications** (`/Applications`), then open it there. This is an expected output path, not evidence of a completed Mac build or verified runtime.
+
+The configuration still requests both `app` and `dmg` when no `--bundles` override is supplied; it has not been changed. DMG packaging is optional and can be requested separately with `pnpm run desktop:build:macos --bundles dmg`, producing disk images under `desktop/src-tauri/target/release/bundle/dmg/` if successful. Use it only in an unlocked graphical Mac session with Finder automation working; this is not a promise to fix timeouts. See [optional DMG packaging](MACOS.md#optional-dmg-packaging) and [Finder/AppleScript timeout troubleshooting](MACOS.md#dmg-finderapplescript-timeout). An app-only build preserves the same app and vault functionality; do not delete an existing vault to fix installer packaging.
 
 The macOS configuration targets `app` and `dmg` with ad-hoc signing (`signingIdentity: "-"`) for local testing. This is neither Developer ID signing nor notarization and can produce Gatekeeper warnings. Only for this specific app, if you trust its source and it is blocked as unnotarized, follow [Apple's Open Anyway guidance](https://support.apple.com/en-us/102445) in **System Settings → Privacy & Security**. Do not disable Gatekeeper, globally strip quarantine attributes, or bypass malware/damaged-app warnings. See the [macOS guide](MACOS.md#4-install-and-open-your-local-build) for details.
 

@@ -505,21 +505,23 @@
       <li class="build-step">
         <div>
           <h3>Clone main, run checks, and build</h3>
-          <p>Run these commands in Terminal from the repository root. Stop and resolve any check, test, or build failure rather than assuming a usable bundle was produced.</p>
-          <pre class="code-snippet"><code>git clone --branch main https://github.com/nzicecool/mynotes.git
-cd mynotes
-pnpm install --frozen-lockfile
-pnpm desktop:check
-pnpm desktop:test
-pnpm desktop:test:native
-pnpm desktop:build:macos
+          <p>These commands are for a desktop-only build. They include development tools, skip the web/Pi Node SQLite install script, and package only the app so Finder's DMG layout script is not needed. The command chain stops at the first error.</p>
+          <pre class="code-snippet"><code>git clone --branch main https://github.com/nzicecool/mynotes.git &amp;&amp;
+cd mynotes &amp;&amp;
+NODE_ENV=development pnpm install --frozen-lockfile --prod=false --ignore-scripts &amp;&amp;
+pnpm desktop:check &amp;&amp;
+pnpm desktop:test &amp;&amp;
+pnpm desktop:test:native &amp;&amp;
+pnpm run desktop:build:macos --bundles app &amp;&amp;
 open desktop/src-tauri/target/release/bundle/macos</code></pre>
+          <p style="margin-top:1rem;"><strong>Install fails at better-sqlite3?</strong> That module serves the separate web/Pi server; desktop uses Rust SQLite. The flags above avoid its install script. Missing tsc, vitest, or tauri after a failed install are downstream symptoms. Keep optional platform packages enabled; this bypass does not fix the web/Pi server.</p>
         </div>
       </li>
       <li class="build-step">
         <div>
           <h3>Use the locally built app, if the build succeeds</h3>
           <p>Drag the generated MyNotes Desktop.app into Applications, then launch it. The current configuration uses <strong>ad-hoc signing, not notarization</strong>; Gatekeeper warnings may occur. This is a local testing path, not a verified or signed public distribution. See the <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/MACOS.md" target="_blank" rel="noopener">macOS guide</a> for full details.</p>
+          <p style="margin-top:1rem;"><strong>DMG fails with AppleEvent timed out (-1712)?</strong> This is Finder/AppleScript installer packaging, not a TypeScript error. A DMG is optional: use the app-only command above and copy the app directly. The guide includes tool checks, comment-free zsh commands, and optional DMG packaging instructions.</p>
         </div>
       </li>
     </ol>
