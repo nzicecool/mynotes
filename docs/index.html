@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MyNotes — Encrypted, Private Note-Taking</title>
-  <meta name="description" content="A self-hostable, end-to-end encrypted note-taking app. Run it on your Raspberry Pi, your server, or anywhere Node.js runs." />
-  <meta property="og:title" content="MyNotes — Encrypted, Private Note-Taking" />
-  <meta property="og:description" content="Self-hostable, end-to-end encrypted notes. Your data never leaves your device unencrypted." />
+  <title>MyNotes — Offline Desktop &amp; Self-Hosted Web Notes</title>
+  <meta name="description" content="Encrypted offline desktop notes with source on main and Linux-tested builds, plus self-hosted web/Raspberry Pi notes. macOS source-build guidance; no ready Mac installer." />
+  <meta property="og:title" content="MyNotes — Offline Desktop &amp; Self-Hosted Web Notes" />
+  <meta property="og:description" content="A local encrypted desktop vault and a separate self-hosted web/Pi app. Desktop source is on main; Linux is tested, macOS and Windows native builds are unverified." />
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -38,6 +38,8 @@
     }
 
     html { scroll-behavior: smooth; }
+    [id] { scroll-margin-top: 80px; }
+    a:focus-visible { outline: 3px solid var(--indigo-light); outline-offset: 4px; border-radius: 4px; }
 
     body {
       font-family: 'Inter', sans-serif;
@@ -85,6 +87,7 @@
     .btn-outline:hover { background: var(--indigo-50); }
     .btn-lg { padding: .75rem 1.8rem; font-size: 1rem; border-radius: 10px; }
     .btn-github { background: var(--gray-900); color: #fff; }
+    .nav-links .btn-github { color: #fff; }
     .btn-github:hover { background: #000; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.25); }
 
     /* ── HERO ── */
@@ -177,10 +180,43 @@
     }
     .section-header { margin-bottom: 3rem; }
 
+    /* ── DESKTOP & MACOS ── */
+    .desktop-section { background: var(--gray-50); }
+    .desktop-section .section-sub, .macos-section .section-sub { max-width: 760px; }
+    .desktop-links { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.5rem 0 2rem; }
+    .platform-status {
+      background: var(--indigo-50); border: 1px solid var(--indigo-100);
+      border-left: 4px solid var(--indigo); border-radius: var(--radius);
+      padding: 1.2rem 1.4rem; margin-bottom: 2rem;
+      color: var(--gray-700); font-size: .9rem;
+    }
+    .platform-status p + p { margin-top: .6rem; }
+    .platform-status a, .build-step a { color: var(--indigo-dark); text-underline-offset: 3px; }
+    .desktop-preview { max-width: 960px; margin: 2.5rem auto 0; }
+    .desktop-preview img {
+      display: block; width: 100%; height: auto;
+      border: 1px solid var(--gray-200); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+    }
+    .desktop-preview figcaption { color: var(--gray-600); font-size: .85rem; margin-top: .9rem; text-align: center; }
+    .build-steps { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; counter-reset: build-step; }
+    .build-step {
+      counter-increment: build-step; display: flex; align-items: flex-start; gap: 1rem; min-width: 0;
+      padding: 1.2rem; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius);
+    }
+    .build-step::before {
+      content: counter(build-step); flex: 0 0 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--indigo); color: #fff; font-size: .85rem; font-weight: 700; border-radius: 50%;
+    }
+    .build-step > div { min-width: 0; }
+    .build-step h3 { font-size: 1rem; margin-bottom: .35rem; }
+    .build-step p { color: var(--gray-600); font-size: .9rem; }
+    .macos-section .code-snippet { background: #1e1b4b; margin-top: 1rem; }
+
     /* ── FEATURES GRID ── */
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
       gap: 1.5rem;
     }
     .feature-card {
@@ -214,7 +250,7 @@
     .selfhost .section-title { color: #fff; }
     .selfhost .section-sub { color: #c7d2fe; }
     .selfhost-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2rem;
       align-items: start;
     }
     .selfhost-steps { display: flex; flex-direction: column; gap: 1rem; }
@@ -237,7 +273,10 @@
       padding: 1.4rem 1.6rem; border: 1px solid rgba(255,255,255,.1);
       font-family: 'JetBrains Mono', monospace; font-size: .82rem;
       color: #c7d2fe; line-height: 1.9; overflow-x: auto;
+      white-space: pre; max-width: 100%; tab-size: 2;
     }
+    .code-snippet code { font: inherit; }
+    .step > div:last-child { min-width: 0; overflow-wrap: anywhere; }
     .code-snippet .comment { color: #6366f1; }
     .code-snippet .cmd { color: #a5f3fc; }
     .code-snippet .flag { color: #fde68a; }
@@ -257,10 +296,11 @@
 
     /* ── SECURITY SECTION ── */
     .security-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center;
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; align-items: center;
     }
     .security-list { display: flex; flex-direction: column; gap: 1.2rem; }
     .security-item { display: flex; gap: 1rem; align-items: flex-start; }
+    .security-item > div:last-child { min-width: 0; overflow-wrap: anywhere; }
     .security-check {
       width: 24px; height: 24px; border-radius: 50%;
       background: #d1fae5; color: #059669;
@@ -285,6 +325,7 @@
       font-family: 'JetBrains Mono', monospace; font-size: .72rem;
       padding: .35rem .7rem; border-radius: 6px; flex: 1;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      min-width: 0;
     }
     .enc-plain { background: #d1fae5; color: #065f46; }
     .enc-cipher { background: #ede9fe; color: #5b21b6; }
@@ -325,12 +366,26 @@
     @media (max-width: 768px) {
       .mockup-body { grid-template-columns: 1fr; }
       .mock-sidebar { display: none; }
-      .selfhost-grid { grid-template-columns: 1fr; }
-      .security-grid { grid-template-columns: 1fr; }
+      .selfhost-grid { grid-template-columns: minmax(0, 1fr); }
+      .security-grid { grid-template-columns: minmax(0, 1fr); }
       .nav-links .hide-mobile { display: none; }
     }
     @media (max-width: 480px) {
       .hero-stats { gap: 1.5rem; }
+      nav { padding: 0 1rem; }
+      .nav-links { gap: .75rem; }
+      .nav-links .btn { padding: .55rem .65rem; }
+      .hero { padding-top: 4rem; }
+      .hero-badge { flex-wrap: wrap; justify-content: center; }
+      .security-visual { padding: 1.2rem; }
+      .enc-arrow { font-size: .85rem; text-align: center; }
+      .code-snippet { padding: 1rem; font-size: .75rem; }
+      .desktop-links .btn { max-width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; }
+      .btn:hover, .feature-card:hover { transform: none; }
     }
   </style>
 </head>
@@ -339,15 +394,16 @@
 <!-- ── NAV ── -->
 <nav>
   <div class="nav-inner">
-    <a href="#" class="nav-logo">
+    <a href="#top" class="nav-logo">
       <div class="nav-logo-icon">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
       </div>
       <span class="nav-logo-text">MyNotes</span>
     </a>
     <div class="nav-links">
-      <a href="#features" class="hide-mobile">Features</a>
-      <a href="#security" class="hide-mobile">Security</a>
+      <a href="#desktop">Desktop</a>
+      <a href="#features" class="hide-mobile">Web/Pi Features</a>
+      <a href="#security" class="hide-mobile">Web/Pi Security</a>
       <a href="#self-host" class="hide-mobile">Self-Host</a>
       <a href="https://github.com/nzicecool/mynotes" target="_blank" rel="noopener" class="btn btn-github">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
@@ -358,30 +414,123 @@
 </nav>
 
 <!-- ── HERO ── -->
-<div class="hero">
+<div class="hero" id="top">
   <div class="hero-badge">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-    Open Source · Self-Hostable · End-to-End Encrypted
+    Open Source · Offline Desktop · Self-Hosted Web/Pi
   </div>
   <h1>Your Notes.<br /><span>Private by Design.</span></h1>
-  <p>A powerful, self-hostable note-taking app with end-to-end encryption. Run it on your Raspberry Pi, your home server, or anywhere Node.js runs — your data never leaves your control.</p>
+  <p>Choose a fully offline desktop vault with local encrypted SQLite, or the separate self-hosted web app for your Raspberry Pi or server. Desktop source is now on main: Linux test builds are verified; macOS and Windows native builds are not yet verified.</p>
   <div class="hero-cta">
     <a href="https://github.com/nzicecool/mynotes" target="_blank" rel="noopener" class="btn btn-primary btn-lg">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
       View on GitHub
     </a>
-    <a href="#self-host" class="btn btn-outline btn-lg">Self-Host in 5 Minutes</a>
+    <a href="#macos" class="btn btn-outline btn-lg">Build on macOS</a>
+    <a href="#self-host" class="btn btn-outline btn-lg">Self-Host Web/Pi</a>
   </div>
   <div class="hero-stats">
-    <div class="stat"><div class="stat-value">E2E</div><div class="stat-label">Encrypted</div></div>
-    <div class="stat"><div class="stat-value">0</div><div class="stat-label">Cloud Dependencies</div></div>
-    <div class="stat"><div class="stat-value">SQLite</div><div class="stat-label">Default Database</div></div>
-    <div class="stat"><div class="stat-value">Pi-Ready</div><div class="stat-label">Raspberry Pi Support</div></div>
+    <div class="stat"><div class="stat-value">Offline</div><div class="stat-label">Desktop Vault</div></div>
+    <div class="stat"><div class="stat-value">6</div><div class="stat-label">Desktop Editors</div></div>
+    <div class="stat"><div class="stat-value">SQLite</div><div class="stat-label">Local Desktop Storage</div></div>
+    <div class="stat"><div class="stat-value">Web/Pi</div><div class="stat-label">Separate Self-Hosted App</div></div>
   </div>
 </div>
 
-<!-- ── APP SCREENSHOT ── -->
+<!-- ── DESKTOP ── -->
+<section id="desktop" class="desktop-section">
+  <div class="section-inner">
+    <div class="section-header">
+      <div class="section-label">MyNotes Desktop</div>
+      <h2 class="section-title">Desktop source is on main.<br />Your vault stays local.</h2>
+      <p class="section-sub">A Tauri 2 app for one user's fully offline notes, with a Rust-owned vault and encrypted local SQLite records. No accounts, login, Raspberry Pi, server, Docker, or HTTPS setup required to use the installed desktop app.</p>
+    </div>
+    <div class="platform-status">
+      <p><strong>Verified platform:</strong> Linux x86-64 test builds and actual UI/keyring runtime checks on Ubuntu 24.04. These are initial test builds, not release-signed installers or Raspberry Pi/ARM builds.</p>
+      <p><strong>macOS &amp; Windows:</strong> Build configurations are included, but native builds, installers, runtime behavior, and signing are unverified. There is currently <strong>no ready Mac installer and no public GitHub Release</strong>. The macOS instructions below describe an unverified source-build path, not a download.</p>
+    </div>
+    <div class="desktop-links">
+      <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/README.md" target="_blank" rel="noopener" class="btn btn-primary">Desktop Guide</a>
+      <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/MACOS.md" target="_blank" rel="noopener" class="btn btn-outline">macOS Build Details</a>
+      <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/BUILD-RESULTS.md" target="_blank" rel="noopener" class="btn btn-outline">Verified Build Results</a>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3 class="feature-title">Local encrypted SQLite</h3>
+        <p class="feature-desc">Titles, bodies, tags, and note metadata are encrypted inside local records. This is record-level encryption, not SQLCipher full-file encryption; counts, opaque IDs, and ciphertext sizes remain visible.</p>
+      </div>
+      <div class="feature-card">
+        <h3 class="feature-title">PIN + OS secret + five codes</h3>
+        <p class="feature-desc">Set a numeric PIN of at least six digits, backed by an OS credential-store device secret and Argon2id key derivation. Save all five recovery codes separately: they are vault-access secrets, not note backups.</p>
+      </div>
+      <div class="feature-card">
+        <h3 class="feature-title">Six editors, one local vault</h3>
+        <p class="feature-desc">Choose plain text, rich text, Markdown, checklist, code, or spreadsheet notes. Desktop notes are separate from the web/Pi database; v1 does not automatically import or sync it.</p>
+      </div>
+      <div class="feature-card">
+        <h3 class="feature-title">Organise and search offline</h3>
+        <p class="feature-desc">Use local tags, search, pinning, archive, and trash. Search runs over unlocked notes on your computer, without sending your notes to a server.</p>
+      </div>
+      <div class="feature-card">
+        <h3 class="feature-title">Serialized autosave &amp; manual lock</h3>
+        <p class="feature-desc">Autosave queues edits and coordinates pending saves before switching, locking, or ordinary close. Manual save is also available. Lock the vault yourself; there is no idle, blur, or suspend auto-lock. It starts locked after restart.</p>
+      </div>
+      <div class="feature-card">
+        <h3 class="feature-title">Portable encrypted backup</h3>
+        <p class="feature-desc">Export a manual .mynotes-backup and restore on another supported computer with a matching recovery code. Keep the file and code separate; old copies retain their matching codes. Backup files are capped at 64 MiB.</p>
+      </div>
+    </div>
+    <figure class="desktop-preview">
+      <img src="assets/desktop-preview.png" alt="Actual MyNotes Desktop UI tested on Linux Ubuntu 24.04, showing the local note list and editor with disposable test notes; not a Mac screenshot" loading="lazy" />
+      <figcaption>Actual Linux-tested desktop UI with disposable test notes. This is not a macOS screenshot or proof of a Mac build.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ── MACOS SOURCE BUILD ── -->
+<section id="macos" class="macos-section">
+  <div class="section-inner">
+    <div class="section-header">
+      <div class="section-label">macOS · Build from Source</div>
+      <h2 class="section-title">Build on your Mac.<br />Not a ready-made installer.</h2>
+      <p class="section-sub">This source-build path is unverified on macOS. Native Mac builds and runtime behavior still need testing. Building requires internet access for dependencies and toolchains; the installed desktop vault is designed to operate offline.</p>
+    </div>
+    <ol class="build-steps">
+      <li class="build-step">
+        <div>
+          <h3>Prepare a native Mac development environment</h3>
+          <p>Install Node.js 22.x matching your Mac's native architecture (Apple Silicon arm64 or Intel x86-64), Xcode Command Line Tools, Rust, and pnpm 10.4.1. Follow the <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/MACOS.md" target="_blank" rel="noopener">complete macOS prerequisites and toolchain setup</a> before continuing.</p>
+        </div>
+      </li>
+      <li class="build-step">
+        <div>
+          <h3>Clone main, run checks, and build</h3>
+          <p>Run these commands in Terminal from the repository root. Stop and resolve any check, test, or build failure rather than assuming a usable bundle was produced.</p>
+          <pre class="code-snippet"><code>git clone --branch main https://github.com/nzicecool/mynotes.git
+cd mynotes
+pnpm install --frozen-lockfile
+pnpm desktop:check
+pnpm desktop:test
+pnpm desktop:test:native
+pnpm desktop:build:macos
+open desktop/src-tauri/target/release/bundle/macos</code></pre>
+        </div>
+      </li>
+      <li class="build-step">
+        <div>
+          <h3>Use the locally built app, if the build succeeds</h3>
+          <p>Drag the generated MyNotes Desktop.app into Applications, then launch it. The current configuration uses <strong>ad-hoc signing, not notarization</strong>; Gatekeeper warnings may occur. This is a local testing path, not a verified or signed public distribution. See the <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/MACOS.md" target="_blank" rel="noopener">macOS guide</a> for full details.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ── WEB/PI APP SCREENSHOT ── -->
 <div class="mockup-section">
+  <div class="section-inner" style="margin-bottom:1.5rem;">
+    <div class="section-label">Separate Web/Pi App Preview</div>
+  </div>
   <div class="mockup-wrap">
     <div class="mockup-bar">
       <div class="dot dot-red"></div>
@@ -392,7 +541,7 @@
     <img
       class="mockup-screenshot"
       src="https://d2xsxph8kpxj0f.cloudfront.net/310419663031786415/DtwFRpTy3ZWQaCiDbRaN4M/app-screenshot_7f82ea19.webp"
-      alt="MyNotes dashboard showing the rich text editor with a note open, sidebar with note list, and formatting toolbar"
+      alt="MyNotes self-hosted web/Pi dashboard showing the rich text editor with a note open, sidebar with note list, and formatting toolbar"
       loading="lazy"
     />
   </div>
@@ -402,9 +551,9 @@
 <section id="features" style="background:#fff;">
   <div class="section-inner">
     <div class="section-header">
-      <div class="section-label">Features</div>
-      <h2 class="section-title">Everything you need.<br />Nothing you don't.</h2>
-      <p class="section-sub">Built for privacy-conscious users who want full control over their data.</p>
+      <div class="section-label">Web/Pi Features</div>
+      <h2 class="section-title">Your self-hosted web app.<br />Your own infrastructure.</h2>
+      <p class="section-sub">These features belong to the separate web/Pi app, not the offline desktop vault. Run the web app on your Raspberry Pi or server for browser-based notes.</p>
     </div>
     <div class="features-grid">
 
@@ -489,9 +638,9 @@
   <div class="section-inner">
     <div class="security-grid">
       <div>
-        <div class="section-label">Security</div>
-        <h2 class="section-title">Zero-knowledge.<br />Zero compromise.</h2>
-        <p class="section-sub" style="margin-bottom:2rem">Encryption happens entirely in your browser. The server stores only ciphertext — it cannot read your notes even if the database is compromised.</p>
+        <div class="section-label">Web/Pi Security</div>
+        <h2 class="section-title">Browser-side encryption.<br />Self-hosted storage.</h2>
+        <p class="section-sub" style="margin-bottom:2rem">In the web/Pi app, note encryption happens in your browser before storage on your server. The password, PBKDF2, and HTTPS setup described here are web/Pi mechanisms, not desktop requirements.</p>
         <div class="security-list">
           <div class="security-item">
             <div class="security-check"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></div>
@@ -504,27 +653,27 @@
             <div class="security-check"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></div>
             <div>
               <div class="security-item-title">PBKDF2 key derivation</div>
-              <div class="security-item-desc">Your password is never sent to the server. A 256-bit encryption key is derived client-side using PBKDF2 with 100,000 iterations.</div>
+              <div class="security-item-desc">The web encryption key is derived client-side using PBKDF2 with 100,000 iterations. This is separate from the web app's account authentication.</div>
             </div>
           </div>
           <div class="security-item">
             <div class="security-check"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></div>
             <div>
               <div class="security-item-title">bcrypt password hashing</div>
-              <div class="security-item-desc">Login passwords are hashed with bcrypt (cost factor 12) before storage. Even a database breach exposes no usable credentials.</div>
+              <div class="security-item-desc">Web account login passwords are hashed with bcrypt (cost factor 12) before storage, rather than stored as plaintext. Desktop has no account login.</div>
             </div>
           </div>
           <div class="security-item">
             <div class="security-check"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></div>
             <div>
-              <div class="security-item-title">HTTPS everywhere</div>
-              <div class="security-item-desc">Caddy reverse proxy with automatic TLS (self-signed or Let's Encrypt). Web Crypto API requires HTTPS — enforced by the setup script.</div>
+              <div class="security-item-title">HTTPS for web/Pi deployments</div>
+              <div class="security-item-desc">The web setup uses a Caddy reverse proxy with TLS (self-signed or Let's Encrypt) for browser Web Crypto access. The offline desktop app does not need this proxy or HTTPS setup.</div>
             </div>
           </div>
         </div>
       </div>
       <div class="security-visual">
-        <div style="font-size:.75rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem">Encryption Flow</div>
+        <div style="font-size:.75rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem">Web/Pi Encryption Flow</div>
         <div class="enc-row">
           <div class="enc-label">Your note</div>
           <div class="enc-value enc-plain">Meeting at 3pm — discuss Q3 budget...</div>
@@ -549,9 +698,9 @@
 <section id="self-host" class="selfhost">
   <div class="section-inner">
     <div class="section-header">
-      <div class="section-label">Self-Hosting</div>
+      <div class="section-label">Web/Pi Self-Hosting</div>
       <h2 class="section-title">Run it on your Pi.<br />Own your data.</h2>
-      <p class="section-sub">One script installs everything: Node.js, Caddy, systemd services, and HTTPS. No Docker required.</p>
+      <p class="section-sub">For the web/Pi app, the native setup script installs Node.js, Caddy, systemd services, and HTTPS. Docker is an alternative. None of this server setup is required for desktop.</p>
     </div>
     <div class="selfhost-grid">
       <div class="selfhost-steps">
@@ -585,9 +734,8 @@
         </div>
       </div>
       <div>
-        <div class="code-snippet">
-<span class="comment"># Clone the repo</span>
-<span class="cmd">git clone</span> https://github.com/nzicecool/mynotes.git
+        <pre class="code-snippet"><code><span class="comment"># Clone main for the web/Pi app</span>
+<span class="cmd">git clone</span> <span class="flag">--branch main</span> https://github.com/nzicecool/mynotes.git
 <span class="cmd">cd</span> mynotes/deploy
 
 <span class="comment"># One-command install (SQLite default)</span>
@@ -605,8 +753,7 @@
 
 <span class="comment"># Update to latest version</span>
 <span class="cmd">git pull</span> &amp;&amp; <span class="cmd">pnpm build</span>
-<span class="cmd">sudo systemctl restart</span> mynotes
-        </div>
+<span class="cmd">sudo systemctl restart</span> mynotes</code></pre>
         <div style="margin-top:1.2rem;display:flex;gap:.75rem;flex-wrap:wrap;">
           <a href="https://github.com/nzicecool/mynotes/blob/main/deploy/HTTPS_SETUP.md" target="_blank" rel="noopener" class="btn btn-outline" style="color:#a5b4fc;border-color:rgba(165,180,252,.4);">
             Full Setup Guide →
@@ -628,6 +775,15 @@
       <div class="section-label">Tech Stack</div>
       <h2 class="section-title" style="font-size:1.8rem;">Built on solid foundations.</h2>
     </div>
+    <h3 style="font-size:1rem;">Offline Desktop</h3>
+    <div class="tech-grid" style="margin-top:1rem;margin-bottom:2rem;">
+      <span class="tech-pill"><span class="tech-dot" style="background:#6366f1;"></span>Tauri 2</span>
+      <span class="tech-pill"><span class="tech-dot" style="background:#f97316;"></span>Rust</span>
+      <span class="tech-pill"><span class="tech-dot" style="background:#0ea5e9;"></span>Local SQLite</span>
+      <span class="tech-pill"><span class="tech-dot" style="background:#8b5cf6;"></span>Argon2id</span>
+      <span class="tech-pill"><span class="tech-dot" style="background:#10b981;"></span>OS Credential Store</span>
+    </div>
+    <h3 style="font-size:1rem;">Self-Hosted Web/Pi</h3>
     <div class="tech-grid">
       <span class="tech-pill"><span class="tech-dot" style="background:#61dafb;"></span>React 19</span>
       <span class="tech-pill"><span class="tech-dot" style="background:#38bdf8;"></span>Tailwind CSS 4</span>
@@ -648,14 +804,15 @@
 <!-- ── CTA ── -->
 <div class="cta-section">
   <h2>Ready to own your notes?</h2>
-  <p>Open source, self-hostable, and private by design. Get started in minutes.</p>
+  <p>Explore the offline desktop source or set up the separate web/Pi app. macOS currently has an unverified source-build path, not a ready installer.</p>
   <div class="cta-buttons">
     <a href="https://github.com/nzicecool/mynotes" target="_blank" rel="noopener" class="btn btn-white btn-lg">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
       View on GitHub
     </a>
+    <a href="#macos" class="btn btn-ghost btn-lg">Build on macOS</a>
     <a href="https://github.com/nzicecool/mynotes/blob/main/deploy/HTTPS_SETUP.md" target="_blank" rel="noopener" class="btn btn-ghost btn-lg">
-      Setup Guide →
+      Web/Pi Setup Guide →
     </a>
   </div>
 </div>
@@ -671,11 +828,14 @@
     </div>
     <div class="footer-links">
       <a href="https://github.com/nzicecool/mynotes" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/nzicecool/mynotes/blob/main/deploy/HTTPS_SETUP.md" target="_blank" rel="noopener">Setup Guide</a>
+      <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/README.md" target="_blank" rel="noopener">Desktop Guide</a>
+      <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/MACOS.md" target="_blank" rel="noopener">macOS Build Guide</a>
+      <a href="https://github.com/nzicecool/mynotes/blob/main/desktop/BUILD-RESULTS.md" target="_blank" rel="noopener">Build Results</a>
+      <a href="https://github.com/nzicecool/mynotes/blob/main/deploy/HTTPS_SETUP.md" target="_blank" rel="noopener">Web/Pi Setup Guide</a>
       <a href="https://github.com/nzicecool/mynotes/issues" target="_blank" rel="noopener">Issues</a>
       <a href="https://github.com/nzicecool/mynotes/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
     </div>
-    <div class="footer-copy">&copy; 2026 MyNotes &mdash; Open source, self-hostable, private by design.</div>
+    <div class="footer-copy">&copy; 2026 MyNotes &mdash; Open source. Offline desktop and self-hosted web/Pi notes.</div>
   </div>
 </footer>
 

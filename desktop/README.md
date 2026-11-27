@@ -2,7 +2,9 @@
 
 MyNotes Desktop is a Tauri 2 application for a single user's offline notes. It uses local SQLite and authenticated encrypted records, not the web application's Express server. There is no login, registration, email configuration, Docker requirement, or Raspberry Pi connection.
 
-Version 0.1.0 is an initial desktop build. See `BUILD-RESULTS.md` for what was actually compiled and tested. Platform configurations are not proof of a tested or signed public release.
+The desktop source is now on **`main`**, alongside the unchanged web/Pi target. **Mac users: follow the [complete macOS source-build and installation guide](MACOS.md).** No Mac installer has been released; the Linux `.deb` and `.AppImage` files are not Mac installers.
+
+Version 0.1.0 is an initial desktop build. See the [verification report](BUILD-RESULTS.md) for what was actually compiled and tested on Linux. Native macOS/Windows builds and runtime behavior have not been verified. Platform configurations are not proof of a tested or signed public release.
 
 ## First use
 
@@ -54,13 +56,40 @@ For the AppImage, run `chmod +x MyNotes-Desktop_0.1.0_amd64.AppImage` followed b
 
 ## Building from source
 
-End users run installed applications without Node.js or Rust. The source-build reference environment is Node.js 22.23.4, pnpm 10.4.1, and Rust 1.100.0, plus the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/). The inactive CI template uses these toolchain versions. This records the development environment, not successful native verification on every operating system.
+End users run installed applications without Node.js or Rust. Use Node.js **22.x**, pnpm **10.4.1**, Rust stable **1.90 or newer** for the native app, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/). The Linux source-build reference used Node.js 22.23.4 and Rust 1.100.0; the inactive CI template records these versions. They are not macOS-tested toolchain versions or proof of successful verification on every operating system. The [macOS guide](MACOS.md) includes complete prerequisite installation steps.
 
-From the repository root:
+### Get the source from `main`
+
+For a fresh checkout (choose a parent directory where `mynotes` does not already exist):
 
 ```sh
-corepack enable
-corepack prepare pnpm@10.4.1 --activate
+git clone --branch main https://github.com/nzicecool/mynotes.git mynotes
+cd mynotes
+```
+
+For an existing clone, first enter its repository root and run `git status`. **Commit your work or stash it before switching branches**; `git stash push --include-untracked` is an option if you are not ready to commit. Keep the stash until you deliberately restore it, and protect any local-only files. Then:
+
+```sh
+git switch main
+git pull --ff-only origin main
+```
+
+If there is no local `main` yet, fetch it with `git fetch origin` and use `git switch --track origin/main` instead of `git switch main`. These examples assume `origin` is the upstream MyNotes repository; check `git remote -v` in an existing clone. If the fast-forward pull refuses, stop and resolve your branch history rather than resetting or discarding work. No desktop feature-branch checkout is needed.
+
+### Install dependencies and run desktop checks
+
+After installing Node and Rust, install the pinned pnpm into your user directory without `sudo` or Corepack:
+
+```sh
+npm install --global --prefix "$HOME/.local" pnpm@10.4.1
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Repeat the export in each new Terminal, or manually add the same line to `~/.zshrc` if using zsh. The first dependency install and build need internet to download dependencies.
+
+Run these commands **from the repository root**, where `package.json` and `pnpm-lock.yaml` live, not from `desktop/` or `deploy/`:
+
+```sh
 pnpm install --frozen-lockfile
 pnpm desktop:check
 pnpm desktop:test
@@ -68,7 +97,9 @@ pnpm desktop:test:native
 pnpm desktop:dev
 ```
 
-The Tauri hooks invoke the repository scripts `pnpm desktop:dev:web` and `pnpm desktop:build:web`; do not replace them with commands that assume pnpm stays in the `desktop` directory.
+The Tauri hooks invoke the repository scripts `pnpm desktop:dev:web` and `pnpm desktop:build:web`; do not replace them with commands that assume pnpm stays in the `desktop` directory. Desktop does not require `.env`, `DATABASE_DRIVER`, `pnpm build`/`pnpm start`, `setup-local.sh`, HTTPS, Docker, or a MyNotes server.
+
+### Linux
 
 On Linux, install build dependencies, WebKitGTK 4.1, DBus, and a working Secret Service provider. On Debian/Ubuntu:
 
@@ -82,6 +113,8 @@ pnpm desktop:build
 
 The Linux build produces Debian and AppImage targets under `desktop/src-tauri/target/release/bundle/`. An AppImage still uses your system's desktop services; it does not provide a private credential store. Native backup file choosers require a working XDG Desktop Portal and file-chooser backend. Install required dependencies before taking an offline computer into use.
 
+### Windows
+
 On Windows, use a native Windows development environment with Microsoft C++ Build Tools and WebView2:
 
 ```sh
@@ -90,13 +123,26 @@ pnpm desktop:build:windows
 
 The Windows configuration uses an NSIS installer with the offline WebView2 installer embedded. Build-time downloads are expected; installed vault operation does not require a MyNotes server. Windows/OS webview update traffic is separate from application vault traffic.
 
-On macOS, install Xcode Command Line Tools and build on a Mac:
+### macOS
+
+Use the [complete macOS guide](MACOS.md) for Xcode Command Line Tools, Node.js 22.x, pnpm 10.4.1, Rust, architecture selection, and safe source updates. Build **on a Mac**, using a native Apple Silicon (`arm64`) or Intel (`x64`) Node installation matched to rustup's default host. There is no universal-binary or verified Mac compatibility claim.
+
+With prerequisites installed and the source checked out from `main`, run from the repository root:
 
 ```sh
+pnpm install --frozen-lockfile
+pnpm desktop:check
+pnpm desktop:test
+pnpm desktop:test:native
 pnpm desktop:build:macos
+open desktop/src-tauri/target/release/bundle/macos
 ```
 
-The macOS configuration uses ad-hoc signing for local testing. Public distribution needs an appropriate signing identity and notarization; ad-hoc signing does not remove Gatekeeper warnings. Windows public signing and SmartScreen reputation also require separate arrangements. No signing purchases or public-release submissions are included in this initial build.
+The default outputs are `desktop/src-tauri/target/release/bundle/macos/MyNotes Desktop.app` and DMGs in `desktop/src-tauri/target/release/bundle/dmg/`. Drag **MyNotes Desktop.app** into **Applications** (`/Applications`), then open it there. These are expected output paths, not evidence of a completed Mac build.
+
+The macOS configuration targets `app` and `dmg` with ad-hoc signing (`signingIdentity: "-"`) for local testing. This is neither Developer ID signing nor notarization and can produce Gatekeeper warnings. Only for this specific app, if you trust its source and it is blocked as unnotarized, follow [Apple's Open Anyway guidance](https://support.apple.com/en-us/102445) in **System Settings → Privacy & Security**. Do not disable Gatekeeper, globally strip quarantine attributes, or bypass malware/damaged-app warnings. See the [macOS guide](MACOS.md#4-install-and-open-your-local-build) for details.
+
+Public distribution needs an appropriate signing identity and notarization. Windows public signing and SmartScreen reputation also require separate arrangements. No signing purchases or public-release submissions are included in this initial build.
 
 macOS and Windows native builds, installers, runtime behavior, signing, and notarization have not been verified in this Linux source-build environment. Their configurations and template jobs are intended build paths, not evidence of completed platform testing or release signing.
 

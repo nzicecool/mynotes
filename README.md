@@ -6,7 +6,29 @@
 
 ## Desktop edition
 
-The separate [MyNotes Desktop](desktop/README.md) target uses Tauri 2 with an encrypted local SQLite vault, a numeric PIN lock, and five recovery codes. It is single-user and works without a login, email service, server, or Raspberry Pi sync. See the desktop guide for platform builds and actual validation results. The web/Pi edition below is unchanged.
+The [MyNotes Desktop](desktop/README.md) source is now on **`main`**; no desktop feature-branch checkout is needed. This separate Tauri 2 app provides a single-user encrypted local SQLite vault, a numeric PIN lock, five recovery codes, and portable encrypted backups without a login or server. Desktop v1 has no Raspberry Pi sync or automatic web/Pi database import.
+
+Linux x86-64 test builds and runtime checks are recorded in the [verification report](desktop/BUILD-RESULTS.md). **No Mac installer has been released**, and native macOS/Windows builds, runtime behavior, and release signing have not been verified. Linux `.deb` and `.AppImage` files are not Mac installers. Start with the [complete macOS source-build guide](desktop/MACOS.md) for prerequisites, installation, and first use.
+
+### macOS quick build (prerequisites already installed)
+
+On a Mac with Node.js 22.x, pnpm 10.4.1, Rust 1.90 or newer, and Xcode Command Line Tools installed as described in the [full guide](desktop/MACOS.md):
+
+```sh
+git clone --branch main https://github.com/nzicecool/mynotes.git mynotes
+cd mynotes
+pnpm install --frozen-lockfile
+pnpm desktop:check
+pnpm desktop:test
+pnpm desktop:test:native
+pnpm desktop:build:macos
+```
+
+The default app output is `desktop/src-tauri/target/release/bundle/macos/MyNotes Desktop.app`; DMGs go in the sibling `bundle/dmg/` directory. This is an unverified native build path with ad-hoc signing, not a notarized release. Desktop does **not** use the web/Pi `.env`, database setup, or server commands below.
+
+## Web / Raspberry Pi edition (web/Pi only)
+
+The features, prerequisites, local setup, environment, and deployment instructions in this section apply to the **web/Pi edition only**, not MyNotes Desktop.
 
 **MyNotes** is a secure, self-hosted note-taking application with end-to-end encryption, multiple note types, offline support, and real-time synchronisation across devices. All note content is encrypted client-side using AES-256-GCM before it ever reaches the server — your password and plaintext notes never leave your browser.
 
@@ -46,6 +68,8 @@ The separate [MyNotes Desktop](desktop/README.md) target uses Tauri 2 with an en
 
 ## Prerequisites
 
+**Web/Pi only.** For desktop prerequisites, use the [desktop guide](desktop/README.md) or [macOS guide](desktop/MACOS.md).
+
 - **Node.js** v22 or later — [nodejs.org](https://nodejs.org)
 - **pnpm** v10 or later — `npm install -g pnpm`
 - **MySQL** 8.0+ — for multi-user / server deployments
@@ -54,6 +78,8 @@ The separate [MyNotes Desktop](desktop/README.md) target uses Tauri 2 with an en
 ---
 
 ## Local Setup
+
+**Web/Pi only:** these steps configure and start a web server, not the desktop app.
 
 ### 1. Clone the repository
 
@@ -126,7 +152,7 @@ Open **http://localhost:3000**, navigate to `/register` to create your account, 
 
 ## Environment Variables
 
-All variables are documented in `.env.example`.
+**Web/Pi only.** All variables are documented in `.env.example`; desktop does not need an `.env` file or `DATABASE_DRIVER`.
 
 ### Required
 
@@ -163,6 +189,8 @@ If `AGENTMAIL_API_KEY` is not set or AgentMail delivery fails, MyNotes falls bac
 ---
 
 ## Configuring Email for Password Reset
+
+**Web/Pi only.** Desktop has no email login or email-based reset.
 
 ### Option 1: AgentMail.to (Recommended)
 
@@ -233,6 +261,8 @@ Copy the URL from the console and open it in a browser to complete the reset.
 ---
 
 ## Deployment
+
+**Web/Pi only.** Docker, HTTPS, and server deployment are not desktop installation steps.
 
 ### Option 1: Docker Compose — MySQL (Recommended for multi-user / server deployments)
 
@@ -450,6 +480,8 @@ kubectl rollout status deployment/mynotes-app -n mynotes
 
 ## Available Scripts
 
+### Web/Pi scripts
+
 | Command | Description |
 |---|---|
 | `pnpm dev` | Start the development server with hot reload |
@@ -459,6 +491,21 @@ kubectl rollout status deployment/mynotes-app -n mynotes
 | `pnpm db:push` | Generate and apply Drizzle schema migrations |
 | `pnpm check` | Run TypeScript type checking |
 | `pnpm format` | Format all files with Prettier |
+
+### Desktop scripts (run from the repository root)
+
+| Command | Description |
+|---|---|
+| `pnpm desktop:check` | Check desktop TypeScript |
+| `pnpm desktop:test` | Run desktop frontend/IPC unit tests |
+| `pnpm desktop:test:native` | Run Rust vault tests |
+| `pnpm desktop:dev` | Launch desktop development mode |
+| `pnpm desktop:build:web` | Build the desktop frontend and run its bundle guard (not the web/Pi server build) |
+| `pnpm desktop:build` | Build Linux desktop packages with the default configuration |
+| `pnpm desktop:build:macos` | Build native macOS app and DMG bundles; see [macOS guide](desktop/MACOS.md) |
+| `pnpm desktop:build:windows` | Build the native Windows NSIS installer |
+
+Platform build commands must be run in the appropriate native development environment; a script's presence is not proof of platform validation.
 
 ---
 
@@ -472,6 +519,16 @@ mynotes/
 │       │   └── editors/     # RichTextEditor, MarkdownEditor, ChecklistEditor, etc.
 │       ├── lib/             # Encryption, offline storage, tRPC client
 │       └── pages/           # Route-level page components
+├── desktop/                 # Separate offline desktop target
+│   ├── README.md            # Desktop usage and platform builds
+│   ├── MACOS.md             # macOS source build and installation guide
+│   ├── BUILD-RESULTS.md     # Recorded verification and platform limits
+│   ├── src/                # Desktop React frontend
+│   ├── native/             # Rust encrypted vault
+│   ├── src-tauri/          # Tauri wrapper and platform bundle configs
+│   ├── tests/              # Desktop tests and Linux smoke runner
+│   └── ci/                 # Inactive platform-build workflow template
+├── docs/                    # GitHub Pages landing page
 ├── deploy/
 │   └── k3s/                 # Kubernetes manifests + deployment guide
 ├── drizzle/                 # Database schema and migration files
@@ -489,6 +546,8 @@ mynotes/
 ---
 
 ## Security Model
+
+**Web/Pi only.** Desktop's PIN, device credential, and recovery model is documented in the [desktop guide](desktop/README.md).
 
 MyNotes is designed with a **zero-knowledge** approach to note storage:
 
@@ -516,6 +575,8 @@ Please do not commit `.env` files or any credentials. The `.gitignore` is config
 ---
 
 ## Roadmap
+
+**Web/Pi backlog only.** For desktop v1 scope and remaining limits, see the [verification report](desktop/BUILD-RESULTS.md).
 
 - [ ] Real-time WebSocket synchronisation across devices
 - [ ] Tag filtering panel in the sidebar
